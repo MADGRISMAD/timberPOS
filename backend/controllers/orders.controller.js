@@ -3,7 +3,7 @@ const { normalizeOrder, orderStatuses, paymentMethods } = require('../models/ord
 
 async function list(req, res) {
   try {
-    return res.status(200).json(await db.GetOrders());
+    return res.status(200).json(await db.GetOrders(req.tenantId));
   } catch (err) {
     console.error(err);
     return res.status(500).send(err.message || 'Error al listar pedidos');
@@ -12,7 +12,7 @@ async function list(req, res) {
 
 async function getById(req, res) {
   try {
-    const order = await db.GetOrderById(req.params.id);
+    const order = await db.GetOrderById(req.params.id, req.tenantId);
     if (!order) return res.status(404).send('Pedido no encontrado');
     return res.status(200).json(order);
   } catch (err) {
@@ -24,7 +24,6 @@ async function getById(req, res) {
 async function create(req, res) {
   try {
     const body = req.body || {};
-    // Compatibilidad con DTO viejo del frontend
     if ((!body.items || !body.items.length) && Array.isArray(body.foods)) {
       body.items = body.foods.map((f) => ({
         foodId: f.food || f.foodId || f.id,
@@ -38,6 +37,7 @@ async function create(req, res) {
     }
 
     const payload = normalizeOrder(body);
+    payload.tenantId = req.tenantId;
     if (!payload.items.length) {
       return res.status(400).send('El pedido necesita al menos un producto');
     }
@@ -46,10 +46,14 @@ async function create(req, res) {
 
     if (payload.tableId && payload.modality === 'dine-in') {
       try {
-        await db.UpdateStatusMesa(payload.tableId, {
-          disponible: false,
-          personaTitular: body.personaTitular || payload.tableName,
-        });
+        await db.UpdateStatusMesa(
+          payload.tableId,
+          {
+            disponible: false,
+            personaTitular: body.personaTitular || payload.tableName,
+          },
+          req.tenantId
+        );
       } catch (e) {
         console.warn('No se pudo ocupar la mesa:', e.message);
       }
@@ -68,10 +72,11 @@ async function updateStatus(req, res) {
     if (!orderStatuses.includes(status)) {
       return res.status(400).send('Estado inválido');
     }
-    const updated = await db.UpdateOrder(req.params.id, {
-      status,
-      updatedAt: new Date(),
-    });
+    const updated = await db.UpdateOrder(
+      req.params.id,
+      { status, updatedAt: new Date() },
+      req.tenantId
+    );
     if (!updated) return res.status(404).send('Pedido no encontrado');
     return res.status(200).json(updated);
   } catch (err) {
@@ -86,23 +91,38 @@ async function pay(req, res) {
     if (!paymentMethods.includes(method)) {
       return res.status(400).send('Método de pago inválido');
     }
-    const existing = await db.GetOrderById(req.params.id);
-    if (!existing) return res.status(404).send('Pedido no encontrado');
 
-    const updated = await db.UpdateOrder(req.params.id, {
-      paymentStatus: 'paid',
-      paymentMethod: method,
-      status: existing.status === 'cancelled' ? existing.status : 'served',
-      paidAt: new Date(),
-      updatedAt: new Date(),
-    });
+    const session = await db.GetOpenCashSession(req.tenantId);
+    if (!session) {
+      return res.status(400).send('Debes abrir la caja antes de cobrar');
+    }
+
+    const existing = await db.GetOrderById(req.params.id, req.tenantId);
+    if (!existing) return res.status(404).send('Pedido no encontrado');
+    if (existing.paymentStatus === 'paid') {
+      return res.status(400).send('El pedido ya está cobrado');
+    }
+
+    const updated = await db.UpdateOrder(
+      req.params.id,
+      {
+        paymentStatus: 'paid',
+        paymentMethod: method,
+        status: existing.status === 'cancelled' ? existing.status : 'served',
+        paidAt: new Date(),
+        updatedAt: new Date(),
+        cashSessionId: session.id,
+      },
+      req.tenantId
+    );
 
     if (existing.tableId) {
       try {
-        await db.UpdateStatusMesa(existing.tableId, {
-          disponible: true,
-          personaTitular: null,
-        });
+        await db.UpdateStatusMesa(
+          existing.tableId,
+          { disponible: true, personaTitular: null },
+          req.tenantId
+        );
       } catch (e) {
         console.warn('No se pudo liberar la mesa:', e.message);
       }

@@ -7,7 +7,9 @@
   "scripts": {
     "dev": "nodemon app.js",
     "build": "webpack",
-    "prod": "node dist/server.js"
+    "prod": "node dist/server.js",
+    "seed:menu": "node scripts/seed-menu.js",
+    "seed:platform-admin": "node scripts/create-platform-admin.js"
   },
   "author": "",
   "license": "ISC",

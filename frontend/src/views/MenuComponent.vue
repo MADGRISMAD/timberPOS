@@ -31,6 +31,9 @@
             class="prod"
             @click="mode === 'pos' ? agregarAOrden(producto) : editFood(producto)"
           >
+            <div class="thumb" :class="{ empty: !producto.imgUrl }">
+              <img v-if="producto.imgUrl" :src="producto.imgUrl" :alt="producto.name" loading="lazy" />
+            </div>
             <span class="price">${{ Number(producto.price || 0).toFixed(0) }}</span>
             <span class="pname">{{ producto.name }}</span>
           </button>
@@ -64,6 +67,10 @@
           <input v-model="foodForm.name" class="inp" placeholder="Nombre" required />
           <input v-model.number="foodForm.price" class="inp" type="number" min="0" step="0.01" placeholder="Precio" required />
           <input v-model="foodForm.description" class="inp" placeholder="Descripción" />
+          <input v-model="foodForm.imgUrl" class="inp" type="url" placeholder="URL de imagen (https://…)" />
+          <div v-if="foodForm.imgUrl" class="preview">
+            <img :src="foodForm.imgUrl" alt="Vista previa" />
+          </div>
           <button type="submit" class="act primary">Guardar</button>
           <button v-if="editingFood" type="button" class="act danger" @click="deleteFood">Eliminar</button>
           <button type="button" class="act" @click="closeFoodForm">Cancelar</button>
@@ -95,7 +102,7 @@ export default {
     const tableId = ref(route.query.tableId || "");
     const tableName = ref(route.query.tableName || "");
     const menuForm = reactive({ name: "", description: "" });
-    const foodForm = reactive({ name: "", price: 0, description: "" });
+    const foodForm = reactive({ name: "", price: 0, description: "", imgUrl: "" });
 
     const productosFiltrados = computed(() => productos.value);
 
@@ -136,6 +143,7 @@ export default {
       foodForm.name = producto.name;
       foodForm.price = producto.price;
       foodForm.description = producto.description || "";
+      foodForm.imgUrl = producto.imgUrl || "";
       showFoodForm.value = true;
     };
 
@@ -145,22 +153,23 @@ export default {
       foodForm.name = "";
       foodForm.price = 0;
       foodForm.description = "";
+      foodForm.imgUrl = "";
     };
 
     const createFood = async () => {
+      const payload = {
+        name: foodForm.name,
+        price: foodForm.price,
+        description: foodForm.description,
+        imgUrl: (foodForm.imgUrl || "").trim(),
+        menuId: selectedMenuId.value,
+      };
       if (editingFood.value) {
-        const updated = await apiService.editFood(editingFood.value.id, {
-          ...foodForm,
-          menuId: selectedMenuId.value,
-        });
+        const updated = await apiService.editFood(editingFood.value.id, payload);
         const idx = productos.value.findIndex((p) => p.id === updated.id);
         if (idx >= 0) productos.value[idx] = updated;
       } else {
-        const created = await apiService.createFood({
-          ...foodForm,
-          menuId: selectedMenuId.value,
-          imgUrl: "",
-        });
+        const created = await apiService.createFood(payload);
         productos.value.push(created);
       }
       closeFoodForm();
@@ -278,35 +287,67 @@ export default {
 }
 .products {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
   gap: 0.55rem;
 }
 .prod {
-  min-height: 6.5rem;
+  min-height: 9.5rem;
   border: none;
   border-radius: 1rem;
   background: var(--timber-panel-elevated);
   color: var(--timber-ink);
   box-shadow: var(--timber-shadow);
-  padding: 0.7rem;
+  padding: 0.45rem 0.55rem 0.65rem;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  align-items: flex-start;
+  justify-content: flex-start;
+  align-items: stretch;
   text-align: left;
   cursor: pointer;
   touch-action: manipulation;
+  gap: 0.35rem;
+  overflow: hidden;
 }
 .prod:active { transform: scale(0.97); }
+.thumb {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 0.7rem;
+  overflow: hidden;
+  background: var(--timber-surface);
+}
+.thumb.empty {
+  background: linear-gradient(135deg, var(--timber-surface), var(--timber-panel-elevated));
+}
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
 .price {
-  font-size: 1.15rem;
+  font-size: 1.05rem;
   font-weight: 800;
   color: var(--timber-primary);
 }
 .pname {
   font-weight: 700;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   line-height: 1.2;
+}
+.preview {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: var(--timber-surface);
+  border: 1px solid var(--timber-line);
+}
+.preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 .add-food {
   grid-column: 1 / -1;
@@ -363,7 +404,7 @@ export default {
     align-items: start;
   }
   .products {
-    grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
   }
   .sheet-bg { align-items: center; padding: 1rem; }
   .sheet { border-radius: 1.15rem; }

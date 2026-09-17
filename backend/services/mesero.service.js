@@ -1,28 +1,29 @@
 const db = require('../database/mongodb');
 
-async function AddWaiter(data){
-    return await db.AddWaiter(data);
+async function AddWaiter(data) {
+  return await db.AddWaiter(data);
 }
-async function GetWaiters(){
-    return await db.GetWaiters();
+async function GetWaiters(tenantId) {
+  return await db.GetWaiters(tenantId);
 }
-async function GetWaiterByCellphone(id){
-    return await db.GetWaiterByCellphone(id);
+async function GetWaiterByCellphone(id, tenantId) {
+  return await db.GetWaiterByCellphone(id, tenantId);
 }
-async function GetWaiterByDisponibility(disponibility){
-    return await db.GetWaiterByDisponibility(disponibility);
+async function GetWaiterByDisponibility(disponibility, tenantId) {
+  return await db.GetWaiterByDisponibility(disponibility, tenantId);
 }
-async function DeleteWaiter(id){
-    return await db.DeleteWaiter(id);
+async function DeleteWaiter(id, tenantId) {
+  return await db.DeleteWaiter(id, tenantId);
 }
-async function UpdateWaiter(id,data){
-    return await db.UpdateWaiter(id,data);
+async function UpdateWaiter(id, data, tenantId) {
+  return await db.UpdateWaiter(id, data, tenantId);
 }
+
 module.exports = {
-    AddWaiter,
-    GetWaiters,
-    GetWaiterByCellphone,
-    GetWaiterByDisponibility,
-    DeleteWaiter,
-    UpdateWaiter
-}
+  AddWaiter,
+  GetWaiters,
+  GetWaiterByCellphone,
+  GetWaiterByDisponibility,
+  DeleteWaiter,
+  UpdateWaiter,
+};

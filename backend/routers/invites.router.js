@@ -1,11 +1,13 @@
 const router = require('express').Router();
 const invites = require('../controllers/invites.controller');
+const { requireAuth, requireActiveSubscription, requireRoles } = require('../middleware/auth.middleware');
 
-router.get('/', invites.list);
-router.post('/', invites.create);
 router.get('/token/:token', invites.getByToken);
 router.post('/accept', invites.accept);
-router.put('/:id/revoke', invites.revoke);
-router.delete('/:id', invites.remove);
+
+router.get('/', requireAuth, requireActiveSubscription, requireRoles('admin'), invites.list);
+router.post('/', requireAuth, requireActiveSubscription, requireRoles('admin'), invites.create);
+router.put('/:id/revoke', requireAuth, requireActiveSubscription, requireRoles('admin'), invites.revoke);
+router.delete('/:id', requireAuth, requireActiveSubscription, requireRoles('admin'), invites.remove);
 
 module.exports = router;

@@ -2,12 +2,12 @@ const db = require('../database/mongodb');
 const { newToken } = require('../models/order.model');
 const { sendInviteEmail } = require('../utils/mail.utils');
 const bcrypt = require('../utils/bcrypt.utils');
-
-const roles = ['admin', 'hosstess', 'waiter'];
+const jwtCreator = require('../utils/jwt.utils');
+const { TENANT_ROLES } = require('../models/tenant.model');
 
 async function list(req, res) {
   try {
-    return res.status(200).json(await db.GetInvites());
+    return res.status(200).json(await db.GetInvites(req.tenantId));
   } catch (err) {
     console.error(err);
     return res.status(500).send(err.message || 'Error al listar invitaciones');
@@ -21,23 +21,24 @@ async function create(req, res) {
     if (!email || !email.includes('@')) {
       return res.status(400).send('Email inválido');
     }
-    if (!roles.includes(role)) {
+    if (!TENANT_ROLES.includes(role)) {
       return res.status(400).send('Rol inválido');
     }
 
     const existingUser = await db.FindUserByEmail(email);
-    if (existingUser) {
-      return res.status(400).send('Ya existe un usuario con ese correo');
+    if (existingUser && existingUser.tenantId === req.tenantId) {
+      return res.status(400).send('Ya existe un usuario con ese correo en este negocio');
     }
 
-    const settings = await db.GetSettings();
+    const settings = await db.GetSettings(req.tenantId);
     const token = newToken();
     const invite = await db.CreateInvite({
       email,
       role,
       token,
       status: 'pending',
-      invitedBy: req.body?.invitedBy || 'admin',
+      tenantId: req.tenantId,
+      invitedBy: req.user?.username || 'admin',
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       createdAt: new Date(),
     });
@@ -60,10 +61,11 @@ async function create(req, res) {
 
 async function revoke(req, res) {
   try {
-    const updated = await db.UpdateInvite(req.params.id, {
-      status: 'revoked',
-      updatedAt: new Date(),
-    });
+    const updated = await db.UpdateInvite(
+      req.params.id,
+      { status: 'revoked', updatedAt: new Date() },
+      req.tenantId
+    );
     if (!updated) return res.status(404).send('Invitación no encontrada');
     return res.status(200).json(updated);
   } catch (err) {
@@ -74,7 +76,7 @@ async function revoke(req, res) {
 
 async function remove(req, res) {
   try {
-    const result = await db.DeleteInvite(req.params.id);
+    const result = await db.DeleteInvite(req.params.id, req.tenantId);
     if (!result.deletedCount) return res.status(404).send('Invitación no encontrada');
     return res.status(200).json({ ok: true });
   } catch (err) {
@@ -117,6 +119,9 @@ async function accept(req, res) {
     if (invite.expiresAt && new Date(invite.expiresAt) < new Date()) {
       return res.status(410).send('Invitación expirada');
     }
+    if (!invite.tenantId) {
+      return res.status(400).send('Invitación sin tenant');
+    }
 
     const existingEmail = await db.FindUserByEmail(invite.email);
     if (existingEmail) {
@@ -127,6 +132,7 @@ async function accept(req, res) {
       return res.status(400).send('El usuario ya existe');
     }
 
+    const role = TENANT_ROLES.includes(invite.role) ? invite.role : 'hosstess';
     const hashed = await bcrypt.hashPassword(password);
     await db.CreateUser({
       name,
@@ -134,30 +140,50 @@ async function accept(req, res) {
       email: invite.email,
       username,
       password: hashed,
-      cellphone: String(cellphone || '0000000000').replace(/\D/g, '').slice(0, 10) || '0000000000',
-      role: invite.role === 'waiter' ? 'hosstess' : invite.role,
+      cellphone:
+        String(cellphone || '0000000000').replace(/\D/g, '').slice(0, 10) || '0000000000',
+      role,
+      tenantId: invite.tenantId,
     });
 
-    if (invite.role === 'waiter') {
+    if (role === 'waiter') {
       await db.AddWaiter({
         name,
         lastName,
         birthDate: new Date(),
         startDate: new Date(),
-        cellphone: String(cellphone || Date.now()).replace(/\D/g, '').slice(0, 10).padEnd(10, '0'),
+        cellphone: String(cellphone || Date.now())
+          .replace(/\D/g, '')
+          .slice(0, 10)
+          .padEnd(10, '0'),
         mesa: [],
         role: 'waiter',
         workSchedule: 'morning',
         status: 'rest',
+        tenantId: invite.tenantId,
       });
     }
 
-    await db.UpdateInvite(String(invite.id || invite._id), {
-      status: 'accepted',
-      acceptedAt: new Date(),
+    await db.UpdateInvite(
+      String(invite.id || invite._id),
+      { status: 'accepted', acceptedAt: new Date() },
+      invite.tenantId
+    );
+
+    const jwt = jwtCreator.generateJWT({
+      userId: username,
+      userRole: role,
+      tenantId: invite.tenantId,
     });
 
-    return res.status(201).json({ ok: true, email: invite.email });
+    return res.status(201).json({
+      ok: true,
+      email: invite.email,
+      token: jwt,
+      role,
+      tenantId: invite.tenantId,
+      username,
+    });
   } catch (err) {
     console.error(err);
     return res.status(500).send(err.message || 'Error al aceptar invitación');

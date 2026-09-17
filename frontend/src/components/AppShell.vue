@@ -25,21 +25,28 @@
       </div>
     </header>
 
-    <div v-if="moreOpen" class="more-sheet" @click.self="moreOpen = false">
-      <div class="more-panel">
-        <h3>Más opciones</h3>
-        <button type="button" class="more-link theme-btn" @click="toggleUiTheme">
-          Tema: {{ isDark ? 'Oscuro' : 'Claro' }} (cambiar)
-        </button>
-        <router-link v-for="item in moreItems" :key="item.to" :to="item.to" class="more-link" @click="moreOpen = false">
-          {{ item.label }}
-        </router-link>
+    <div class="pos-body">
+      <div v-if="billingBanner" class="billing-banner" :class="billingBanner.tone">
+        <span>{{ billingBanner.text }}</span>
+        <router-link to="/billing">Facturación</router-link>
       </div>
-    </div>
 
-    <main class="pos-content">
-      <slot />
-    </main>
+      <div v-if="moreOpen" class="more-sheet" @click.self="moreOpen = false">
+        <div class="more-panel">
+          <h3>Más opciones</h3>
+          <button type="button" class="more-link theme-btn" @click="toggleUiTheme">
+            Tema: {{ isDark ? 'Oscuro' : 'Claro' }} (cambiar)
+          </button>
+          <router-link v-for="item in moreItems" :key="item.to" :to="item.to" class="more-link" @click="moreOpen = false">
+            {{ item.label }}
+          </router-link>
+        </div>
+      </div>
+
+      <main class="pos-content">
+        <slot />
+      </main>
+    </div>
 
     <nav class="pos-dock" aria-label="Navegación principal">
       <router-link
@@ -60,10 +67,13 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { venueStore } from "../venueStore";
 import { themeStore, toggleUiTheme } from "../themeStore";
+import { clearSession, canAccessRoute, hasRole } from "../authStore";
+import { apiService } from "../apiService";
 
 const router = useRouter();
 const moreOpen = ref(false);
 const now = ref(new Date());
+const billingStatus = ref(null);
 let timer;
 
 const businessName = computed(() => venueStore.businessName || "Mi negocio");
@@ -73,6 +83,24 @@ const clock = computed(() =>
   now.value.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })
 );
 
+const billingBanner = computed(() => {
+  const s = billingStatus.value;
+  if (!s || !hasRole("admin", "cashier")) return null;
+  if (s.billingStatus === "past_due") {
+    return { tone: "danger", text: "Pago pendiente — regulariza tu suscripción." };
+  }
+  if (s.billingStatus === "suspended") {
+    return { tone: "danger", text: "Cuenta suspendida — contacta a Timber o paga tu plan." };
+  }
+  if (s.billingStatus === "trialing" && Number(s.trialDaysLeft) <= 3) {
+    return {
+      tone: "warn",
+      text: `Tu prueba termina en ${s.trialDaysLeft} día(s). Activa un plan.`,
+    };
+  }
+  return null;
+});
+
 const ico = {
   tables: `<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="8" width="18" height="3" rx="1"/><path d="M6 11v7M18 11v7M9 14h6"/></svg>`,
   order: `<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>`,
@@ -80,29 +108,44 @@ const ico = {
   cash: `<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg>`,
 };
 
-const dock = [
-  { to: "/main", label: "Mesas", icon: ico.tables },
-  { to: "/menu", label: "Pedido", icon: ico.order },
-  { to: "/kitchen", label: "Cocina", icon: ico.kitchen },
-  { to: "/orders", label: "Caja", icon: ico.cash },
+const allDock = [
+  { to: "/main", name: "main", label: "Mesas", icon: ico.tables },
+  { to: "/menu", name: "menu", label: "Pedido", icon: ico.order },
+  { to: "/kitchen", name: "kitchen", label: "Cocina", icon: ico.kitchen },
+  { to: "/orders", name: "orders", label: "Caja", icon: ico.cash },
 ];
 
-const moreItems = [
-  { to: "/dashboard", label: "Resumen / Dashboard" },
-  { to: "/waitlist", label: "Lista de espera" },
-  { to: "/staff", label: "Personal / Meseros" },
-  { to: "/settings", label: "Configuración" },
+const allMore = [
+  { to: "/dashboard", name: "dashboard", label: "Resumen / Dashboard" },
+  { to: "/waitlist", name: "waitlist", label: "Lista de espera" },
+  { to: "/staff", name: "staff", label: "Personal / Meseros" },
+  { to: "/billing", name: "billing", label: "Facturación / Planes" },
+  { to: "/settings", name: "settings", label: "Configuración" },
 ];
+
+const dock = computed(() => allDock.filter((i) => canAccessRoute(i.name)));
+const moreItems = computed(() => allMore.filter((i) => canAccessRoute(i.name)));
 
 function logout() {
   moreOpen.value = false;
+  clearSession();
   router.push("/");
+}
+
+async function loadBilling() {
+  if (!hasRole("admin", "cashier")) return;
+  try {
+    billingStatus.value = await apiService.getBillingStatus();
+  } catch {
+    billingStatus.value = null;
+  }
 }
 
 onMounted(() => {
   timer = setInterval(() => {
     now.value = new Date();
   }, 30000);
+  loadBilling();
 });
 onUnmounted(() => clearInterval(timer));
 </script>
@@ -118,6 +161,29 @@ onUnmounted(() => clearInterval(timer));
     var(--timber-surface);
   font-family: var(--font-sans);
   color: var(--timber-ink);
+}
+
+.billing-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.billing-banner.warn {
+  background: color-mix(in srgb, #b8956c 28%, var(--timber-panel));
+  color: var(--timber-ink);
+}
+.billing-banner.danger {
+  background: var(--timber-danger-soft);
+  color: var(--timber-danger);
+}
+.billing-banner a {
+  color: inherit;
+  font-weight: 800;
+  text-decoration: underline;
 }
 
 .pos-top {
@@ -201,6 +267,13 @@ onUnmounted(() => clearInterval(timer));
 .icon-btn.ghost {
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.pos-body {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
 }
 
 .pos-content {

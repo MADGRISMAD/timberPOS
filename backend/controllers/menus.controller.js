@@ -2,7 +2,7 @@ const db = require('../database/mongodb');
 
 async function listMenus(req, res) {
   try {
-    return res.status(200).json(await db.GetMenus());
+    return res.status(200).json(await db.GetMenus(req.tenantId));
   } catch (err) {
     console.error(err);
     return res.status(500).send(err.message || 'Error al listar menús');
@@ -11,7 +11,7 @@ async function listMenus(req, res) {
 
 async function getMenu(req, res) {
   try {
-    const menu = await db.GetMenuById(req.params.id);
+    const menu = await db.GetMenuById(req.params.id, req.tenantId);
     if (!menu) return res.status(404).send('Menú no encontrado');
     return res.status(200).json(menu);
   } catch (err) {
@@ -27,6 +27,7 @@ async function createMenu(req, res) {
     const created = await db.CreateMenu({
       name,
       description: description || '',
+      tenantId: req.tenantId,
     });
     return res.status(201).json(created);
   } catch (err) {
@@ -37,7 +38,7 @@ async function createMenu(req, res) {
 
 async function updateMenu(req, res) {
   try {
-    const updated = await db.UpdateMenu(req.params.id, req.body || {});
+    const updated = await db.UpdateMenu(req.params.id, req.body || {}, req.tenantId);
     if (!updated) return res.status(404).send('Menú no encontrado');
     return res.status(200).json(updated);
   } catch (err) {
@@ -48,7 +49,7 @@ async function updateMenu(req, res) {
 
 async function deleteMenu(req, res) {
   try {
-    const result = await db.DeleteMenu(req.params.id);
+    const result = await db.DeleteMenu(req.params.id, req.tenantId);
     if (!result || result.deletedCount === 0) {
       return res.status(404).send('Menú no encontrado');
     }
@@ -61,7 +62,7 @@ async function deleteMenu(req, res) {
 
 async function listFoods(req, res) {
   try {
-    return res.status(200).json(await db.GetFoods());
+    return res.status(200).json(await db.GetFoods(req.tenantId));
   } catch (err) {
     console.error(err);
     return res.status(500).send(err.message || 'Error al listar platillos');
@@ -70,7 +71,7 @@ async function listFoods(req, res) {
 
 async function getFood(req, res) {
   try {
-    const food = await db.GetFoodById(req.params.id);
+    const food = await db.GetFoodById(req.params.id, req.tenantId);
     if (!food) return res.status(404).send('Platillo no encontrado');
     return res.status(200).json(food);
   } catch (err) {
@@ -91,6 +92,7 @@ async function createFood(req, res) {
       description: description || '',
       imgUrl: imgUrl || '',
       menuId: String(menuId),
+      tenantId: req.tenantId,
     });
     return res.status(201).json(created);
   } catch (err) {
@@ -101,7 +103,7 @@ async function createFood(req, res) {
 
 async function updateFood(req, res) {
   try {
-    const updated = await db.UpdateFood(req.params.id, req.body || {});
+    const updated = await db.UpdateFood(req.params.id, req.body || {}, req.tenantId);
     if (!updated) return res.status(404).send('Platillo no encontrado');
     return res.status(200).json(updated);
   } catch (err) {
@@ -112,7 +114,7 @@ async function updateFood(req, res) {
 
 async function deleteFood(req, res) {
   try {
-    const result = await db.DeleteFood(req.params.id);
+    const result = await db.DeleteFood(req.params.id, req.tenantId);
     if (!result || result.deletedCount === 0) {
       return res.status(404).send('Platillo no encontrado');
     }

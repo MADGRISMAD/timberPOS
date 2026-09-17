@@ -70,6 +70,8 @@
               <option value="admin">Admin</option>
               <option value="hosstess">Hostess</option>
               <option value="waiter">Mesero</option>
+              <option value="kitchen">Cocina</option>
+              <option value="cashier">Caja</option>
             </select>
           </label>
           <button type="submit" class="btn-primary" :disabled="inviting">{{ inviting ? 'Enviando…' : 'Enviar invitación' }}</button>

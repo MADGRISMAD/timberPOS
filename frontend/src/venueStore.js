@@ -1,17 +1,7 @@
 import { reactive, watch } from "vue";
-import axios from "axios";
+import { apiClient } from "./apiService";
 
 const STORAGE_KEY = "timber_venue_settings";
-
-const apiBase =
-  typeof window !== "undefined" && window.location.hostname === "localhost"
-    ? "http://localhost:8081/"
-    : "https://produccion-api.com/";
-
-const api = axios.create({
-  baseURL: apiBase,
-  headers: { "Content-Type": "application/json" },
-});
 
 const defaultSettings = {
   businessName: "",
@@ -69,7 +59,7 @@ export function isSetupComplete() {
 export async function fetchVenueSettings() {
   venueStore.loading = true;
   try {
-    const { data } = await api.get("/settings");
+    const { data } = await apiClient.get("/settings");
     Object.assign(venueStore, { ...defaultSettings, ...data, ready: true });
     return venueStore;
   } catch {
@@ -89,7 +79,7 @@ export async function saveVenueSettings(payload) {
   };
 
   try {
-    const { data } = await api.post("/settings", next);
+    const { data } = await apiClient.post("/settings", next);
     Object.assign(venueStore, { ...next, ...data, ready: true });
   } catch {
     Object.assign(venueStore, { ...next, ready: true });

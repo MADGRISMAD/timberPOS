@@ -64,7 +64,6 @@
 import AppShell from '../components/AppShell.vue';
 import { ref, onMounted } from 'vue';
 import { apiService } from '../apiService';
-import Axios from '../main.ts';
 
 const clientesEnEspera = ref([]);
 const modalAgregarCliente = ref(false);
@@ -146,7 +145,7 @@ async function asignarMesaACliente() {
         disponible: false,
         personaTitular: clienteSeleccionado.value.nombre,
       });
-      await Axios.delete(`/usuarios/waitlist/delete/${clienteSeleccionado.value.telefono}`);
+      await apiService.deleteWaitlist(clienteSeleccionado.value.telefono);
       clientesEnEspera.value = clientesEnEspera.value.filter(
         (c) => c.telefono !== clienteSeleccionado.value.telefono
       );
@@ -160,7 +159,7 @@ async function asignarMesaACliente() {
 
 async function eliminarClienteEnEspera(cliente) {
   try {
-    await Axios.delete(`/usuarios/waitlist/delete/${cliente.telefono}`);
+    await apiService.deleteWaitlist(cliente.telefono);
     clientesEnEspera.value = clientesEnEspera.value.filter((c) => c.telefono !== cliente.telefono);
     cerrarModalOpcionesCliente();
   } catch (err) {

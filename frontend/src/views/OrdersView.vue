@@ -1,6 +1,39 @@
 <template>
   <AppShell>
     <div class="orders-page">
+      <div class="cash-banner" :class="{ open: cashOpen }">
+        <div v-if="!cashOpen">
+          <strong>Caja cerrada</strong>
+          <p>Ábrela para poder cobrar pedidos.</p>
+          <div class="cash-actions">
+            <label>Fondo inicial
+              <input v-model.number="openingFloat" type="number" min="0" step="1" />
+            </label>
+            <button type="button" class="btn-primary" :disabled="cashBusy" @click="openCash">
+              Abrir caja
+            </button>
+          </div>
+        </div>
+        <div v-else>
+          <strong>Caja abierta</strong>
+          <p>
+            Fondo {{ money(session.openingFloat) }} ·
+            Ventas {{ money(cashTotals.total) }} ·
+            Efectivo esperado {{ money((session.openingFloat || 0) + cashTotals.cash) }}
+          </p>
+          <div class="cash-actions">
+            <label>Efectivo contado
+              <input v-model.number="countedCash" type="number" min="0" step="1" />
+            </label>
+            <button type="button" class="btn-danger" :disabled="cashBusy" @click="closeCash">
+              Cerrar caja
+            </button>
+          </div>
+        </div>
+        <p v-if="cashMsg" class="ok">{{ cashMsg }}</p>
+        <p v-if="cashErr" class="err">{{ cashErr }}</p>
+      </div>
+
       <div class="toolbar">
         <p>Cobro y seguimiento de pedidos del salón.</p>
         <router-link to="/menu" class="btn-primary">Nuevo pedido</router-link>
@@ -36,7 +69,19 @@
           <div class="foot">
             <strong>{{ money(o.total) }}</strong>
             <div class="actions">
-              <button v-if="o.paymentStatus !== 'paid'" type="button" class="btn-primary" @click="openPay(o)">Cobrar</button>
+              <router-link
+                class="link-btn"
+                :to="`/print/order/${o.id}?mode=receipt`"
+                target="_blank"
+              >Imprimir</router-link>
+              <button
+                v-if="o.paymentStatus !== 'paid'"
+                type="button"
+                class="btn-primary"
+                :disabled="!cashOpen"
+                :title="cashOpen ? '' : 'Abre la caja primero'"
+                @click="openPay(o)"
+              >Cobrar</button>
               <button v-if="o.status === 'pending'" type="button" @click="setStatus(o, 'preparing')">A cocina</button>
             </div>
           </div>
@@ -67,6 +112,7 @@
 
 <script setup>
 import { computed, onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 import AppShell from "../components/AppShell.vue";
 import { apiService } from "../apiService";
 import {
@@ -76,10 +122,20 @@ import {
   paymentStatusLabel,
 } from "../labels";
 
+const router = useRouter();
 const orders = ref([]);
 const filter = ref("open");
 const payOrder = ref(null);
 const payMethod = ref("cash");
+
+const cashOpen = ref(false);
+const session = ref(null);
+const cashTotals = ref({ cash: 0, card: 0, transfer: 0, other: 0, total: 0 });
+const openingFloat = ref(0);
+const countedCash = ref(0);
+const cashBusy = ref(false);
+const cashMsg = ref("");
+const cashErr = ref("");
 
 const filters = [
   { id: "open", label: "Abiertos" },
@@ -112,25 +168,90 @@ function modalityText(m) {
   return labelOf(modalityLabel, m);
 }
 
+async function loadCash() {
+  try {
+    const data = await apiService.getCashSession();
+    cashOpen.value = Boolean(data.open);
+    session.value = data.session;
+    cashTotals.value = data.totals || { cash: 0, card: 0, transfer: 0, other: 0, total: 0 };
+    if (data.session) {
+      countedCash.value = Number(
+        (data.session.openingFloat || 0) + (data.totals?.cash || 0)
+      );
+    }
+  } catch {
+    cashOpen.value = false;
+    session.value = null;
+  }
+}
+
+async function openCash() {
+  cashBusy.value = true;
+  cashErr.value = "";
+  cashMsg.value = "";
+  try {
+    await apiService.openCashSession(Number(openingFloat.value || 0));
+    cashMsg.value = "Caja abierta.";
+    await loadCash();
+  } catch (e) {
+    cashErr.value = e.response?.data || "No se pudo abrir la caja";
+  } finally {
+    cashBusy.value = false;
+  }
+}
+
+async function closeCash() {
+  if (!confirm("¿Cerrar la caja con el efectivo contado?")) return;
+  cashBusy.value = true;
+  cashErr.value = "";
+  cashMsg.value = "";
+  try {
+    const res = await apiService.closeCashSession(Number(countedCash.value || 0));
+    cashMsg.value = `Caja cerrada. Diferencia: ${money(res.session?.difference)}`;
+    if (res.session?.id) {
+      router.push(`/print/cash/${res.session.id}?autoprint=1`);
+    }
+    await loadCash();
+  } catch (e) {
+    cashErr.value = e.response?.data || "No se pudo cerrar la caja";
+  } finally {
+    cashBusy.value = false;
+  }
+}
+
 async function load() {
   try {
     orders.value = (await apiService.getOrders()) || [];
   } catch {
     orders.value = [];
   }
+  await loadCash();
 }
 
 function openPay(o) {
+  if (!cashOpen.value) {
+    cashErr.value = "Abre la caja antes de cobrar.";
+    return;
+  }
   payOrder.value = o;
   payMethod.value = "cash";
 }
 
 async function confirmPay() {
   if (!payOrder.value) return;
-  const updated = await apiService.payOrder(payOrder.value.id, payMethod.value);
-  const idx = orders.value.findIndex((x) => x.id === updated.id);
-  if (idx >= 0) orders.value[idx] = updated;
-  payOrder.value = null;
+  try {
+    const updated = await apiService.payOrder(payOrder.value.id, payMethod.value);
+    const idx = orders.value.findIndex((x) => x.id === updated.id);
+    if (idx >= 0) orders.value[idx] = updated;
+    const id = payOrder.value.id;
+    payOrder.value = null;
+    await loadCash();
+    if (confirm("¿Imprimir cuenta?")) {
+      window.open(`/print/order/${id}?mode=receipt&autoprint=1`, "_blank");
+    }
+  } catch (e) {
+    cashErr.value = e.response?.data || "No se pudo cobrar";
+  }
 }
 
 async function setStatus(o, status) {
@@ -144,9 +265,31 @@ onMounted(load);
 
 <style scoped>
 .orders-page { animation: t-fade-up .45s ease both; }
+.cash-banner {
+  margin-bottom: 1rem;
+  padding: 1rem 1.1rem;
+  border-radius: 1rem;
+  border: 1px solid var(--timber-line);
+  background: var(--timber-warning-soft);
+  color: var(--timber-ink);
+}
+.cash-banner.open { background: var(--timber-success-soft); }
+.cash-banner p { margin: .25rem 0 .55rem; font-size: .9rem; color: var(--timber-muted); }
+.cash-actions { display: flex; flex-wrap: wrap; gap: .55rem; align-items: end; }
+.cash-actions label { display: grid; gap: .25rem; font-size: .8rem; font-weight: 700; }
+.cash-actions input {
+  min-height: 2.75rem;
+  border: 1px solid var(--timber-line);
+  border-radius: .65rem;
+  padding: .5rem .7rem;
+  background: var(--timber-panel-elevated);
+  color: var(--timber-ink);
+}
 .toolbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:1.2rem; gap:1rem; flex-wrap:wrap; }
 .toolbar p { margin:0; color:var(--timber-muted); }
 .btn-primary { background:var(--timber-primary); color:var(--timber-on-primary); border:none; border-radius:.8rem; padding:.75rem 1.1rem; font-weight:700; text-decoration:none; cursor:pointer; display:inline-block; min-height:3rem; box-shadow:var(--timber-shadow); }
+.btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+.btn-danger { background:var(--timber-danger); color:#fff; border:none; border-radius:.8rem; padding:.75rem 1.1rem; font-weight:700; cursor:pointer; min-height:3rem; }
 .filters { display:flex; gap:.45rem; flex-wrap:wrap; margin-bottom:1rem; }
 .filters button { border:1px solid var(--timber-line); background:var(--timber-panel-elevated); color:var(--timber-ink); border-radius:999px; padding:.55rem 1rem; cursor:pointer; font-size:.9rem; font-weight:700; min-height:2.85rem; }
 .filters button.active { background:var(--timber-primary); color:var(--timber-on-primary); border-color:transparent; }
@@ -155,22 +298,12 @@ onMounted(load);
 .head { display:flex; justify-content:space-between; gap:1rem; align-items:flex-start; }
 .head h3 { margin:0; font-family:var(--font-display); font-size:1.2rem; font-weight:700; letter-spacing:-0.01em; }
 .meta { margin:.25rem 0 0; color:var(--timber-muted); font-size:.82rem; }
-.tags { display:flex; gap:.4rem; flex-wrap:wrap; justify-content:flex-end; max-width:14rem; }
+.tags { display:flex; gap:.4rem; flex-wrap:wrap; justify-content:flex-end; }
 .badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 1.7rem;
-  padding: 0 0.75rem;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  line-height: 1;
-  white-space: nowrap;
-  border: 1px solid transparent;
-  background: var(--timber-primary-soft);
-  color: var(--timber-primary);
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 1.7rem; padding: 0 0.75rem; border-radius: 999px;
+  font-size: 0.75rem; font-weight: 700; line-height: 1; white-space: nowrap;
+  background: var(--timber-primary-soft); color: var(--timber-primary);
 }
 .badge.st-pending { background: var(--timber-warning-soft); color: var(--timber-warning); }
 .badge.st-preparing { background: color-mix(in srgb, var(--timber-accent) 22%, transparent); color: var(--timber-accent); }
@@ -183,7 +316,10 @@ onMounted(load);
 .foot { display:flex; justify-content:space-between; align-items:center; gap:1rem; }
 .actions { display:flex; gap:.45rem; flex-wrap:wrap; }
 .actions button:not(.btn-primary) { border:1px solid var(--timber-line); background:var(--timber-panel-elevated); color:var(--timber-ink); border-radius:.7rem; padding:.65rem .85rem; cursor:pointer; font-weight:700; min-height:2.85rem; }
+.link-btn { display:inline-flex; align-items:center; border:1px solid var(--timber-line); background:var(--timber-panel-elevated); color:var(--timber-ink); border-radius:.7rem; padding:.65rem .85rem; font-weight:700; text-decoration:none; min-height:2.85rem; }
 .empty { color:var(--timber-muted); }
+.ok { color: var(--timber-success); font-size: .88rem; margin: .5rem 0 0; }
+.err { color: var(--timber-danger); font-size: .88rem; margin: .5rem 0 0; }
 .modal-bg { position:fixed; inset:0; background:rgba(10,16,14,.48); backdrop-filter:blur(6px); display:flex; align-items:center; justify-content:center; z-index:50; }
 .modal { background:var(--timber-panel); color:var(--timber-ink); border-radius:1.15rem; padding:1.3rem; width:min(22rem,92vw); display:grid; gap:.75rem; border:1px solid var(--timber-line); }
 .modal h3 { margin:0; font-family:var(--font-display); font-weight:700; letter-spacing:-0.01em; }

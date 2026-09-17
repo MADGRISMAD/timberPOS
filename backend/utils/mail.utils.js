@@ -42,4 +42,30 @@ async function sendInviteEmail({ to, inviteUrl, role, businessName }) {
   return { sent: true, fallback: false, inviteUrl };
 }
 
-module.exports = { sendInviteEmail, hasSmtpConfig };
+async function sendPasswordResetEmail({ to, resetUrl }) {
+  const subject = 'Restablecer contraseña — Timber';
+  const html = `
+    <div style="font-family:sans-serif;line-height:1.5;color:#1c1f1d">
+      <h2>Restablecer contraseña</h2>
+      <p>Recibimos una solicitud para cambiar tu contraseña.</p>
+      <p><a href="${resetUrl}" style="display:inline-block;padding:10px 16px;background:#1F4D3A;color:#fff;text-decoration:none;border-radius:8px">Elegir nueva contraseña</a></p>
+      <p style="font-size:12px;color:#66706a">El enlace expira en 1 hora.<br>${resetUrl}</p>
+    </div>
+  `;
+
+  if (!hasSmtpConfig()) {
+    console.log('[mail:dev-fallback] Reset email not sent (SMTP missing). Link:', resetUrl);
+    return { sent: false, fallback: true, resetUrl };
+  }
+
+  const transport = createTransport();
+  await transport.sendMail({
+    from: process.env.MAIL_FROM || process.env.SMTP_USER,
+    to,
+    subject,
+    html,
+  });
+  return { sent: true, fallback: false, resetUrl };
+}
+
+module.exports = { sendInviteEmail, sendPasswordResetEmail, hasSmtpConfig };

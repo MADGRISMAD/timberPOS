@@ -25,6 +25,7 @@
 import { onMounted, reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { apiService } from "../apiService";
+import { setSession, homeForRole } from "../authStore";
 
 const route = useRoute();
 const router = useRouter();
@@ -55,12 +56,23 @@ async function accept() {
   saving.value = true;
   error.value = "";
   try {
-    await apiService.acceptInvite({
+    const res = await apiService.acceptInvite({
       token: route.params.token,
       ...form,
     });
-    ok.value = true;
-    setTimeout(() => router.push("/"), 1200);
+    if (res.token) {
+      setSession({
+        token: res.token,
+        role: res.role,
+        tenantId: res.tenantId,
+        username: res.username,
+      });
+      ok.value = true;
+      setTimeout(() => router.push({ name: homeForRole(res.role) }), 800);
+    } else {
+      ok.value = true;
+      setTimeout(() => router.push("/"), 1200);
+    }
   } catch (e) {
     error.value = e.response?.data || "No se pudo aceptar la invitación.";
   } finally {

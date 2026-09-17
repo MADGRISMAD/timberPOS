@@ -19,36 +19,56 @@
           <span>Contraseña</span>
           <input v-model="password" type="password" placeholder="••••••••" required />
         </label>
-        <button type="submit" class="btn-primary">Ingresar</button>
-        <p v-if="error" class="error-text">Usuario o contraseña incorrectos</p>
+        <button type="submit" class="btn-primary" :disabled="loading">
+          {{ loading ? 'Ingresando…' : 'Ingresar' }}
+        </button>
+        <p v-if="error" class="error-text">{{ error }}</p>
       </form>
 
-      <router-link to="/register" class="auth-link">
-        ¿No tienes cuenta? Regístrate
-      </router-link>
+      <router-link to="/forgot" class="auth-link">¿Olvidaste tu contraseña?</router-link>
+      <router-link to="/register" class="auth-link">¿No tienes cuenta? Regístrate</router-link>
     </div>
   </div>
 </template>
 
 <script>
-import { isSetupComplete } from "../venueStore";
+import { apiService } from "../apiService";
+import { setSession, homeForRole } from "../authStore";
+import { fetchVenueSettings, isSetupComplete } from "../venueStore";
 
 export default {
   data() {
     return {
       username: "",
       password: "",
-      error: false,
+      error: "",
+      loading: false,
     };
   },
   methods: {
-        login() {
-            if (import.meta.env.DEV) {
-                this.$router.push(isSetupComplete() ? "/main" : "/setup");
-            } else {
-                this.error = true;
-            }
-        },
+    async login() {
+      this.error = "";
+      this.loading = true;
+      try {
+        const res = await apiService.login(this.username, this.password);
+        setSession({
+          token: res.token,
+          role: res.role,
+          tenantId: res.tenantId,
+          username: res.username,
+        });
+        await fetchVenueSettings();
+        if (res.role === "admin" && !isSetupComplete()) {
+          this.$router.push("/setup");
+        } else {
+          this.$router.push({ name: homeForRole(res.role) });
+        }
+      } catch (e) {
+        this.error = typeof e.response?.data === "string" ? e.response.data : "Usuario o contraseña incorrectos";
+      } finally {
+        this.loading = false;
+      }
+    },
   },
 };
 </script>
@@ -63,7 +83,6 @@ export default {
   padding: 1.5rem;
   font-family: var(--font-sans);
 }
-
 .auth-atmosphere {
   position: absolute;
   inset: 0;
@@ -72,74 +91,59 @@ export default {
     radial-gradient(ellipse 55% 40% at 88% 78%, rgba(26, 74, 56, 0.45), transparent 50%),
     linear-gradient(155deg, #0f241c 0%, #1a3f32 42%, #2a4d40 100%);
 }
-
 .auth-panel {
   position: relative;
   z-index: 1;
   width: 100%;
   max-width: 26rem;
-  background: rgba(255, 252, 248, 0.94);
-  backdrop-filter: blur(12px);
-  border-radius: 1.35rem;
-  padding: 2.1rem 1.7rem 1.7rem;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.32);
-  animation: rise 0.55s ease-out;
+  background: var(--timber-panel, #fffcf8);
+  border-radius: 1.15rem;
+  padding: 1.75rem 1.5rem 1.4rem;
+  box-shadow: 0 28px 60px rgba(0, 0, 0, 0.28);
 }
-
-@keyframes rise {
-  from { opacity: 0; transform: translateY(14px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
 .brand-block { text-align: center; margin-bottom: 1.5rem; }
 .brand-logo {
   width: 3.6rem; height: 3.6rem; border-radius: 0.95rem;
   margin: 0 auto 0.85rem; display: block;
-  box-shadow: 0 10px 24px rgba(0,0,0,.18);
 }
 .brand-name {
   font-family: var(--font-display);
   font-size: 2.1rem;
   margin: 0;
-  color: var(--timber-primary);
-  letter-spacing: -0.02em;
+  color: var(--timber-primary, #1a4a38);
   font-weight: 800;
 }
-.brand-tagline { margin: 0.4rem 0 0; color: var(--timber-muted); font-size: 0.92rem; }
-.auth-heading { font-size: 1.05rem; font-weight: 600; margin: 0 0 1rem; color: var(--timber-ink); }
+.brand-tagline { margin: 0.4rem 0 0; color: var(--timber-muted, #66706a); font-size: 0.92rem; }
+.auth-heading { font-size: 1.05rem; font-weight: 600; margin: 0 0 1rem; }
 .auth-form { display: grid; gap: 0.9rem; }
-.field { display: grid; gap: 0.35rem; font-size: 0.85rem; font-weight: 500; color: #3a433d; }
+.field { display: grid; gap: 0.35rem; font-size: 0.85rem; font-weight: 500; }
 .field input {
-  border: 1px solid rgba(18,24,22,.12);
+  border: 1px solid var(--timber-line, rgba(18,24,22,.12));
   border-radius: 0.7rem;
   padding: 0.75rem 0.85rem;
   font: inherit;
   background: #fff;
-}
-.field input:focus {
-  outline: none;
-  border-color: var(--timber-primary);
-  box-shadow: 0 0 0 3px rgba(26, 74, 56, 0.14);
 }
 .btn-primary {
   margin-top: 0.25rem;
   border: none;
   border-radius: 0.7rem;
   padding: 0.8rem;
-  background: var(--timber-primary);
+  background: var(--timber-primary, #1a4a38);
   color: #f8f6f2;
   font: inherit;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 10px 24px rgba(26,74,56,.25);
-  transition: transform 0.15s ease, background 0.15s ease;
 }
-.btn-primary:hover { background: #14382b; transform: translateY(-1px); }
+.btn-primary:disabled { opacity: 0.6; }
 .error-text { margin: 0; text-align: center; color: #b42318; font-size: 0.85rem; }
 .auth-link {
-  display: block; text-align: center; margin-top: 1.15rem;
-  font-size: 0.875rem; color: var(--timber-muted); text-decoration: none;
+  display: block;
+  text-align: center;
+  margin-top: 0.75rem;
+  color: var(--timber-primary, #1a4a38);
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-decoration: none;
 }
-.auth-link:hover { color: var(--timber-primary); }
 </style>

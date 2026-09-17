@@ -80,7 +80,8 @@
 </template>
 
 <script>
-import Axios from "../main.ts";
+import { apiService } from "../apiService";
+import { setSession } from "../authStore";
 
 export default {
   data() {
@@ -146,24 +147,25 @@ export default {
           this.formatCellphoneError = true;
           return;
         }
-        const request = await Axios.post("usuarios/register", {
+        const request = await apiService.register({
           name: this.firstName,
           lastName: this.lastName,
-          birthDate: this.birthdate,
           email: this.email,
           username: this.username,
           password: this.password,
           cellphone: num,
-        }).catch((error) => {
-          this.onError = true;
-          this.Error = error.response.data;
-          throw new Error("Error al registrar: " + error.response.data);
         });
-        if (request.status == 201) {
-          this.confirmRequest = true;
-          this.$router.push("/setup");
-        }
+        setSession({
+          token: request.token,
+          role: request.role,
+          tenantId: request.tenantId,
+          username: request.username,
+        });
+        this.confirmRequest = true;
+        this.$router.push("/setup");
       } catch (error) {
+        this.onError = true;
+        this.Error = error.response?.data || error.message;
         console.error(error);
       }
     },

@@ -22,6 +22,9 @@ export const roleLabel = {
   admin: "Admin",
   hosstess: "Hostess",
   waiter: "Mesero",
+  kitchen: "Cocina",
+  cashier: "Caja",
+  platform_admin: "Platform",
 };
 
 export const inviteStatusLabel = {

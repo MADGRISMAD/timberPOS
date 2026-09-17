@@ -36,13 +36,20 @@
               </div>
               <p class="meta">{{ modalityText(o.modality) }}</p>
 
-              <ul class="items">
-                <li v-for="(item, i) in o.items || []" :key="i">
-                  <span class="qty">{{ item.quantity }}</span>
-                  <span class="name">{{ item.name }}</span>
-                </li>
-              </ul>
+            <ul class="items">
+              <li v-for="(item, i) in o.items || []" :key="i">
+                <span class="qty">{{ item.quantity }}</span>
+                <span class="name">{{ item.name }}</span>
+              </li>
+            </ul>
 
+            <div class="ticket-actions">
+              <a
+                class="print-link"
+                :href="`/print/order/${o.id}?mode=kitchen`"
+                target="_blank"
+                rel="noopener"
+              >Imprimir</a>
               <button
                 type="button"
                 class="bump"
@@ -52,6 +59,7 @@
               >
                 {{ busyId === o.id ? '…' : col.action }}
               </button>
+            </div>
             </article>
 
             <p v-if="!byStatus(col.status).length" class="empty">Vacío</p>
@@ -332,6 +340,20 @@ onUnmounted(() => {
   line-height: 1.2;
 }
 
+.ticket-actions { display: grid; gap: 0.4rem; }
+.print-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.5rem;
+  border-radius: 0.7rem;
+  border: 1px solid var(--timber-line);
+  background: var(--timber-panel);
+  color: var(--timber-ink);
+  font-weight: 700;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
 .bump {
   width: 100%;
   min-height: 3.15rem;

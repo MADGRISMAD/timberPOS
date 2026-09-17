@@ -6,5 +6,7 @@ const mesaSchema = Joi.object({
     disponible: Joi.boolean().optional().default(true),
     mesero: Joi.string().optional().allow(null).default(null),
     personaTitular: Joi.string().optional().allow(null).default(null),
+    posX: Joi.number().integer().min(0).allow(null).optional(),
+    posY: Joi.number().integer().min(0).allow(null).optional(),
 })
 module.exports = mesaSchema;
