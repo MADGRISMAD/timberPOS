@@ -101,10 +101,15 @@ export default {
   padding: 1.75rem 1.5rem 1.4rem;
   box-shadow: 0 28px 60px rgba(0, 0, 0, 0.28);
 }
-.brand-block { text-align: center; margin-bottom: 1.5rem; }
+.brand-block { 
+  text-align: center; 
+  margin-bottom: 1.5rem; }
 .brand-logo {
-  width: 3.6rem; height: 3.6rem; border-radius: 0.95rem;
-  margin: 0 auto 0.85rem; display: block;
+  width: 3.6rem; 
+  height: 3.6rem; 
+  border-radius: 0.95rem;
+  margin: 0 auto 0.85rem; 
+  display: block;
 }
 .brand-name {
   font-family: var(--font-display);
@@ -113,16 +118,34 @@ export default {
   color: var(--timber-primary, #1a4a38);
   font-weight: 800;
 }
-.brand-tagline { margin: 0.4rem 0 0; color: var(--timber-muted, #66706a); font-size: 0.92rem; }
-.auth-heading { font-size: 1.05rem; font-weight: 600; margin: 0 0 1rem; }
-.auth-form { display: grid; gap: 0.9rem; }
-.field { display: grid; gap: 0.35rem; font-size: 0.85rem; font-weight: 500; }
+.brand-tagline { 
+  margin: 0.4rem 0 0; 
+  color: var(--timber-muted, #66706a); 
+  font-size: 0.92rem; 
+}
+.auth-heading { 
+  font-size: 1.05rem; 
+  font-weight: 600; 
+  margin: 0 0 1rem; 
+}
+.auth-form { 
+  display: grid; 
+  gap: 0.9rem; 
+}
+.field { 
+  display: grid; 
+  gap: 0.35rem; 
+  font-size: 0.85rem; 
+  font-weight: 500; 
+}
 .field input {
   border: 1px solid var(--timber-line, rgba(18,24,22,.12));
   border-radius: 0.7rem;
   padding: 0.75rem 0.85rem;
   font: inherit;
   background: #fff;
+  color: #000;
+  color-scheme: light;
 }
 .btn-primary {
   margin-top: 0.25rem;
@@ -135,6 +158,9 @@ export default {
   font-weight: 600;
   cursor: pointer;
 }
+.btn-primary:hover {
+  background: #16382b;
+}
 .btn-primary:disabled { opacity: 0.6; }
 .error-text { margin: 0; text-align: center; color: #b42318; font-size: 0.85rem; }
 .auth-link {
@@ -145,5 +171,8 @@ export default {
   font-weight: 600;
   font-size: 0.9rem;
   text-decoration: none;
+}
+.auth-link:hover {
+  color: #1f4d3a;
 }
 </style>

@@ -188,9 +188,9 @@ export default {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 70% 50% at 15% 15%, rgba(196, 165, 116, 0.35), transparent 55%),
-    radial-gradient(ellipse 60% 45% at 85% 75%, rgba(31, 77, 58, 0.4), transparent 50%),
-    linear-gradient(155deg, #1a2e26 0%, #243d33 40%, #3d4f42 100%);
+    radial-gradient(ellipse 70% 50% at 12% 18%, rgba(184, 149, 108, 0.32), transparent 55%),
+    radial-gradient(ellipse 55% 40% at 88% 78%, rgba(26, 74, 56, 0.45), transparent 50%),
+    linear-gradient(155deg, #0f241c 0%, #1a3f32 42%, #2a4d40 100%);
 }
 
 .auth-panel {
@@ -198,7 +198,7 @@ export default {
   z-index: 1;
   width: 100%;
   max-width: 28rem;
-  background: rgba(255, 252, 248, 0.96);
+  background: var(--timber-panel, #fffcf8);
   border-radius: 1.15rem;
   padding: 1.75rem 1.5rem 1.4rem;
   box-shadow: 0 28px 60px rgba(0, 0, 0, 0.28);
@@ -206,30 +206,29 @@ export default {
 
 .brand-block {
   text-align: center;
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
 }
 
 .brand-logo {
-  width: 3rem;
-  height: 3rem;
-  border-radius: 0.75rem;
-  margin: 0 auto 0.55rem;
+  width: 3.6rem; 
+  height: 3.6rem; 
+  border-radius: 0.95rem;
+  margin: 0 auto 0.85rem; 
   display: block;
 }
 
 .brand-name {
   font-family: var(--font-display);
-  font-size: 1.75rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
+  font-size: 2.1rem;
   margin: 0;
-  color: #1f4d3a;
+  color: var(--timber-primary, #1a4a38);
+  font-weight: 800;
 }
 
-.brand-tagline {
-  margin: 0.25rem 0 0;
-  color: #66706a;
-  font-size: 0.85rem;
+.brand-tagline { 
+  margin: 0.4rem 0 0; 
+  color: var(--timber-muted, #66706a); 
+  font-size: 0.92rem; 
 }
 
 .auth-heading {
@@ -238,9 +237,9 @@ export default {
   margin: 0 0 0.85rem;
 }
 
-.auth-form {
-  display: grid;
-  gap: 0.7rem;
+.auth-form { 
+  display: grid; 
+  gap: 0.9rem; 
 }
 
 .grid-2 {
@@ -249,19 +248,21 @@ export default {
   gap: 0.7rem;
 }
 
-.field {
-  display: grid;
-  gap: 0.3rem;
-  font-size: 0.82rem;
-  font-weight: 500;
-  color: #3a433d;
+.field { 
+  display: grid; 
+  gap: 0.35rem; 
+  font-size: 0.85rem; 
+  font-weight: 500; 
 }
 
 .field input {
-  border: 1px solid #cdd5cf;
-  border-radius: 0.5rem;
-  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--timber-line, rgba(18,24,22,.12));
+  border-radius: 0.7rem;
+  padding: 0.75rem 0.85rem;
   font: inherit;
+  background: #fff;
+  color: #000;
+  color-scheme: light;
 }
 
 .field input:focus {
@@ -271,11 +272,12 @@ export default {
 }
 
 .btn-primary {
+  margin-top: 0.25rem;
   border: none;
-  border-radius: 0.55rem;
-  padding: 0.75rem;
-  background: #1f4d3a;
-  color: #f7f4ef;
+  border-radius: 0.7rem;
+  padding: 0.8rem;
+  background: var(--timber-primary, #1a4a38);
+  color: #f8f6f2;
   font: inherit;
   font-weight: 600;
   cursor: pointer;
@@ -286,14 +288,11 @@ export default {
 }
 
 .error-inline,
-.error-text {
-  color: #b42318;
-  font-size: 0.8rem;
-}
-
-.error-text {
-  text-align: center;
-  margin: 0;
+.error-text { 
+  margin: 0; 
+  text-align: center; 
+  color: #b42318; 
+  font-size: 0.85rem; 
 }
 
 .success-link {
@@ -307,9 +306,10 @@ export default {
 .auth-link {
   display: block;
   text-align: center;
-  margin-top: 1rem;
-  font-size: 0.85rem;
-  color: #5c675f;
+  margin-top: 0.75rem;
+  color: var(--timber-primary, #1a4a38);
+  font-weight: 600;
+  font-size: 0.9rem;
   text-decoration: none;
 }
 
