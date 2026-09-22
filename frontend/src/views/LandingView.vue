@@ -1,5 +1,10 @@
 <template>
   <div class="landing" ref="root" @scroll.passive="onScroll">
+    <div class="sky" aria-hidden="true">
+      <span class="sheet s1" :style="drift(0.16)"></span>
+      <span class="sheet s2" :style="drift(0.28)"></span>
+      <span class="sheet s3" :style="drift(0.1)"></span>
+    </div>
     <header class="nav">
       <a href="#top" class="nav-brand">
         <img src="/logo.svg" alt="" width="36" height="36" />
@@ -448,9 +453,61 @@ watch(() => route.hash, scrollToHash);
   position: relative;
   height: 100%;
   overflow: auto;
-  background: var(--timber-surface);
+  background: transparent;
   color: var(--timber-ink);
   font-family: var(--font-sans);
+}
+
+.sky {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background: var(--timber-surface);
+}
+.sheet {
+  position: absolute;
+  left: -15%;
+  width: 130%;
+  height: 22rem;
+  filter: blur(28px);
+  will-change: transform;
+}
+.s1 {
+  top: 6%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--timber-primary) 26%, transparent) 45%,
+    transparent 100%
+  );
+}
+.s2 {
+  top: 46%;
+  height: 16rem;
+  background: linear-gradient(
+    100deg,
+    transparent 8%,
+    color-mix(in srgb, var(--timber-primary) 16%, transparent) 50%,
+    transparent 92%
+  );
+}
+.s3 {
+  top: 78%;
+  height: 20rem;
+  background: linear-gradient(
+    80deg,
+    color-mix(in srgb, var(--timber-topbar) 12%, transparent),
+    transparent 75%
+  );
+}
+
+.nav,
+main,
+.foot {
+  position: relative;
+  z-index: 1;
 }
 
 .nav {
@@ -1092,6 +1149,7 @@ watch(() => route.hash, scrollToHash);
 .final-cta { text-align: center; position: relative; z-index: 1; }
 
 @media (prefers-reduced-motion: reduce) {
+  .sheet,
   .hero-visual,
   .device-row {
     transform: none !important;
