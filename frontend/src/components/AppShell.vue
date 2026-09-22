@@ -1,19 +1,33 @@
 <template>
-  <div class="pos-shell">
+  <div class="pos-shell" :class="{ desk: isDesk }">
     <header class="pos-top">
       <div class="brand">
         <img :src="logoSrc" alt="" class="brand-logo" />
-        <div>
-          <p class="brand-name">Timber</p>
+        <div class="brand-text">
+          <p class="brand-name hide-mobile">Timber</p>
           <p class="brand-venue">{{ businessName }}</p>
         </div>
       </div>
+
+      <!-- Nav PC (rail horizontal en top) -->
+      <nav class="top-nav only-pc" aria-label="Navegación">
+        <router-link
+          v-for="item in dock"
+          :key="'top-' + item.to"
+          :to="item.to"
+          class="top-nav-item"
+        >
+          <span class="dock-ico" v-html="item.icon"></span>
+          {{ item.label }}
+        </router-link>
+      </nav>
+
       <div class="top-actions">
-        <span class="clock">{{ clock }}</span>
+        <span class="clock hide-mobile">{{ clock }}</span>
         <button
           type="button"
-          class="icon-btn"
-          :title="isDark ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'"
+          class="icon-btn only-pc"
+          :title="isDark ? 'Tema claro' : 'Tema oscuro'"
           @click="toggleUiTheme"
         >
           {{ isDark ? '☀' : '☾' }}
@@ -21,7 +35,7 @@
         <button type="button" class="icon-btn" @click="moreOpen = !moreOpen" aria-label="Más opciones">
           Más
         </button>
-        <button type="button" class="icon-btn ghost" @click="logout">Salir</button>
+        <button type="button" class="icon-btn ghost only-pc" @click="logout">Salir</button>
       </div>
     </header>
 
@@ -34,12 +48,22 @@
       <div v-if="moreOpen" class="more-sheet" @click.self="moreOpen = false">
         <div class="more-panel">
           <h3>Más opciones</h3>
-          <button type="button" class="more-link theme-btn" @click="toggleUiTheme">
-            Tema: {{ isDark ? 'Oscuro' : 'Claro' }} (cambiar)
+          <p class="more-clock only-mobile">{{ clock }}</p>
+          <button type="button" class="more-link theme-btn hide-pc" @click="toggleUiTheme">
+            Tema: {{ isDark ? 'Oscuro' : 'Claro' }}
           </button>
-          <router-link v-for="item in moreItems" :key="item.to" :to="item.to" class="more-link" @click="moreOpen = false">
+          <router-link
+            v-for="item in moreItems"
+            :key="item.to"
+            :to="item.to"
+            class="more-link"
+            @click="moreOpen = false"
+          >
             {{ item.label }}
           </router-link>
+          <button type="button" class="more-link danger hide-pc" @click="logout">
+            Cerrar sesión
+          </button>
         </div>
       </div>
 
@@ -48,7 +72,8 @@
       </main>
     </div>
 
-    <nav class="pos-dock" aria-label="Navegación principal">
+    <!-- Dock solo móvil y tablet -->
+    <nav class="pos-dock hide-pc" aria-label="Navegación principal">
       <router-link
         v-for="item in dock"
         :key="item.to"
@@ -64,17 +89,22 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { venueStore } from "../venueStore";
 import { themeStore, toggleUiTheme } from "../themeStore";
 import { clearSession, canAccessRoute, hasRole } from "../authStore";
 import { apiService } from "../apiService";
 
+const route = useRoute();
 const router = useRouter();
 const moreOpen = ref(false);
 const now = ref(new Date());
 const billingStatus = ref(null);
 let timer;
+
+const isDesk = computed(() =>
+  ["pos", "products", "orders"].includes(String(route.name || ""))
+);
 
 const businessName = computed(() => venueStore.businessName || "Mi negocio");
 const logoSrc = computed(() => venueStore.logoUrl || "/logo.svg");
@@ -102,23 +132,20 @@ const billingBanner = computed(() => {
 });
 
 const ico = {
-  tables: `<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="8" width="18" height="3" rx="1"/><path d="M6 11v7M18 11v7M9 14h6"/></svg>`,
-  order: `<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>`,
-  kitchen: `<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 4v8a4 4 0 008 0V4M12 16v4M9 20h6"/></svg>`,
-  cash: `<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg>`,
+  sell: `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16l-1.2 12.2a2 2 0 01-2 1.8H7.2a2 2 0 01-2-1.8L4 7z"/><path d="M8 7V5a4 4 0 018 0v2"/></svg>`,
+  products: `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>`,
+  cash: `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg>`,
 };
 
 const allDock = [
-  { to: "/main", name: "main", label: "Mesas", icon: ico.tables },
-  { to: "/menu", name: "menu", label: "Pedido", icon: ico.order },
-  { to: "/kitchen", name: "kitchen", label: "Cocina", icon: ico.kitchen },
+  { to: "/pos", name: "pos", label: "Vender", icon: ico.sell },
+  { to: "/products", name: "products", label: "Productos", icon: ico.products },
   { to: "/orders", name: "orders", label: "Caja", icon: ico.cash },
 ];
 
 const allMore = [
   { to: "/dashboard", name: "dashboard", label: "Resumen / Dashboard" },
-  { to: "/waitlist", name: "waitlist", label: "Lista de espera" },
-  { to: "/staff", name: "staff", label: "Personal / Meseros" },
+  { to: "/staff", name: "staff", label: "Empleados" },
   { to: "/billing", name: "billing", label: "Facturación / Planes" },
   { to: "/settings", name: "settings", label: "Configuración" },
 ];
@@ -152,12 +179,17 @@ onUnmounted(() => clearInterval(timer));
 
 <style scoped>
 .pos-shell {
-  min-height: 100vh;
-  min-height: 100dvh;
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   background:
-    radial-gradient(ellipse 80% 50% at 100% 0%, color-mix(in srgb, var(--timber-accent) 18%, transparent), transparent 50%),
+    radial-gradient(ellipse 70% 45% at 100% 0%, color-mix(in srgb, var(--timber-primary) 10%, transparent), transparent 55%),
     var(--timber-surface);
   font-family: var(--font-sans);
   color: var(--timber-ink);
@@ -168,12 +200,12 @@ onUnmounted(() => clearInterval(timer));
   justify-content: space-between;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.55rem 1rem;
-  font-size: 0.9rem;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.85rem;
   font-weight: 600;
 }
 .billing-banner.warn {
-  background: color-mix(in srgb, #b8956c 28%, var(--timber-panel));
+  background: color-mix(in srgb, #e08a1e 28%, var(--timber-panel));
   color: var(--timber-ink);
 }
 .billing-banner.danger {
@@ -190,80 +222,98 @@ onUnmounted(() => clearInterval(timer));
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.65rem 1rem;
+  gap: 0.65rem;
+  padding: 0.35rem 0.65rem;
   background: var(--timber-topbar);
   color: var(--timber-topbar-text);
-  position: sticky;
-  top: 0;
   z-index: 30;
+  flex-shrink: 0;
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
+  gap: 0.55rem;
   min-width: 0;
 }
-
 .brand-logo {
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: 0.65rem;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.45rem;
   object-fit: cover;
+  flex-shrink: 0;
 }
-
 .brand-name {
   margin: 0;
-  font-size: 0.68rem;
-  letter-spacing: 0.16em;
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--timber-accent);
+  color: color-mix(in srgb, var(--timber-topbar-text) 62%, #7eb0e8);
   font-weight: 700;
 }
-
 .brand-venue {
-  margin: 0.1rem 0 0;
+  margin: 0;
   font-family: var(--font-display);
-  font-size: 1.05rem;
+  font-size: 0.95rem;
   font-weight: 700;
   letter-spacing: -0.01em;
   line-height: 1.15;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 36vw;
+  max-width: 42vw;
+}
+
+.top-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 1;
+  justify-content: center;
+  min-width: 0;
+}
+.top-nav-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.4rem;
+  padding: 0 0.85rem;
+  border-radius: 0.55rem;
+  color: color-mix(in srgb, var(--timber-topbar-text) 78%, transparent);
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 0.88rem;
+}
+.top-nav-item.router-link-active {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
 }
 
 .top-actions {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  gap: 0.35rem;
+  flex-shrink: 0;
 }
-
 .clock {
   font-variant-numeric: tabular-nums;
   font-weight: 600;
-  font-size: 1rem;
-  margin-right: 0.15rem;
+  font-size: 0.95rem;
   opacity: 0.9;
+  margin-right: 0.15rem;
 }
-
 .icon-btn {
-  min-height: 2.75rem;
-  min-width: 3.4rem;
-  padding: 0 0.85rem;
+  min-height: 2.35rem;
+  min-width: 2.6rem;
+  padding: 0 0.65rem;
   border: none;
-  border-radius: 0.7rem;
+  border-radius: 0.5rem;
   background: rgba(255, 255, 255, 0.12);
   color: var(--timber-topbar-text);
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   cursor: pointer;
 }
-
 .icon-btn.ghost {
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.2);
@@ -271,67 +321,69 @@ onUnmounted(() => clearInterval(timer));
 
 .pos-body {
   min-height: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  overflow: auto;
+  overflow: hidden;
 }
-
 .pos-content {
-  overflow: auto;
-  padding: 0.85rem 0.85rem 0.5rem;
-  padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0.55rem 0.65rem;
+  display: flex;
+  flex-direction: column;
+}
+.pos-content > * {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.pos-shell.desk .pos-content {
+  padding: 0;
 }
 
 .pos-dock {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 0.35rem;
-  padding: 0.45rem 0.55rem calc(0.55rem + env(safe-area-inset-bottom, 0px));
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.25rem;
+  padding: 0.28rem 0.4rem calc(0.32rem + env(safe-area-inset-bottom, 0px));
   background: var(--timber-dock);
   border-top: 1px solid var(--timber-line);
-  box-shadow: 0 -10px 30px color-mix(in srgb, var(--timber-ink) 8%, transparent);
-  position: sticky;
-  bottom: 0;
   z-index: 30;
+  flex-shrink: 0;
 }
-
 .dock-item {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.2rem;
-  min-height: 4.25rem;
-  border-radius: 0.9rem;
+  gap: 0.08rem;
+  min-height: 3.15rem;
+  border-radius: 0.65rem;
   text-decoration: none;
   color: var(--timber-dock-text);
   font-weight: 700;
-  font-size: 0.82rem;
-  transition: background 0.15s ease, color 0.15s ease;
+  font-size: 0.72rem;
 }
-
 .dock-item.router-link-active {
   background: var(--timber-primary);
   color: var(--timber-on-primary);
   box-shadow: var(--timber-shadow);
 }
-
-.dock-ico {
-  display: grid;
-  place-items: center;
-}
+.dock-ico { display: grid; place-items: center; }
 
 .more-sheet {
   position: fixed;
   inset: 0;
   z-index: 40;
-  background: rgba(10, 16, 14, 0.45);
+  background: rgba(10, 18, 32, 0.5);
   display: flex;
   align-items: flex-start;
   justify-content: flex-end;
-  padding: 3.5rem 0.75rem 1rem;
+  padding: 3.25rem 0.65rem 1rem;
 }
-
 .more-panel {
   width: min(22rem, 92vw);
   background: var(--timber-panel);
@@ -343,46 +395,56 @@ onUnmounted(() => clearInterval(timer));
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
   border: 1px solid var(--timber-line);
 }
-
 .more-panel h3 {
-  margin: 0 0 0.35rem;
+  margin: 0 0 0.25rem;
   font-family: var(--font-display);
-  font-size: 1.2rem;
+  font-size: 1.15rem;
   font-weight: 700;
-  letter-spacing: -0.01em;
 }
-
+.more-clock {
+  margin: 0 0 0.35rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--timber-muted);
+}
 .more-link {
   display: block;
   width: 100%;
   text-align: left;
-  padding: 1rem 0.9rem;
-  border-radius: 0.75rem;
+  padding: 0.9rem 0.85rem;
+  border-radius: 0.7rem;
   text-decoration: none;
   color: var(--timber-ink);
   font-weight: 600;
-  font-size: 1.05rem;
+  font-size: 1rem;
   background: var(--timber-primary-soft);
   border: none;
   cursor: pointer;
   font-family: inherit;
 }
-
-.more-link:hover,
-.more-link:active {
-  filter: brightness(0.97);
+.more-link.danger {
+  background: var(--timber-danger-soft);
+  color: var(--timber-danger);
 }
-
 .theme-btn {
   background: color-mix(in srgb, var(--timber-accent) 18%, var(--timber-panel));
 }
 
-@media (min-width: 900px) {
-  .pos-content {
-    padding: 1rem 1.25rem;
+/* —— Tablet —— */
+@media (min-width: 768px) and (max-width: 1099.98px) {
+  .pos-top { padding: 0.4rem 0.85rem; }
+  .brand-venue { max-width: 28vw; font-size: 1.05rem; }
+  .dock-item { min-height: 3.5rem; font-size: 0.8rem; }
+  .pos-shell:not(.desk) .pos-content { padding: 0.75rem 1rem; }
+}
+
+/* —— PC —— */
+@media (min-width: 1100px) {
+  .pos-shell {
+    grid-template-rows: auto minmax(0, 1fr);
   }
-  .brand-venue {
-    max-width: 20rem;
-  }
+  .pos-top { padding: 0.45rem 1rem; gap: 1rem; }
+  .brand-venue { max-width: 16rem; font-size: 1.05rem; }
+  .pos-shell:not(.desk) .pos-content { padding: 0.9rem 1.25rem; }
 }
 </style>

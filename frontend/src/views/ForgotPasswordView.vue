@@ -9,7 +9,7 @@
       </form>
       <p v-if="msg" class="ok">{{ msg }}</p>
       <p v-if="err" class="err">{{ err }}</p>
-      <router-link to="/">Volver al login</router-link>
+      <router-link to="/login">Volver al login</router-link>
     </div>
   </div>
 </template>

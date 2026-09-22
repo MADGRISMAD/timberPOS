@@ -8,10 +8,10 @@ export default {
     extend: {
       colors: {
         timber: {
-          primary: "#1A4A38",
-          accent: "#B8956C",
-          surface: "#F6F3EE",
-          ink: "#121816",
+          primary: "#1E5AA8",
+          accent: "#E08A1E",
+          surface: "#EEF1F6",
+          ink: "#1A2332",
         },
       },
       fontFamily: {

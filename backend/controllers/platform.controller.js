@@ -73,7 +73,7 @@ async function setPlan(req, res) {
   try {
     const plan = String(req.body?.plan || '');
     if (!PLANS.includes(plan)) {
-      return res.status(400).send('plan debe ser basic o pro');
+      return res.status(400).send('plan debe ser basic, growth o pro');
     }
     const updated = await db.UpdateTenant(req.params.id, { plan });
     if (!updated) return res.status(404).send('Tenant no encontrado');

@@ -103,6 +103,16 @@ async function pay(req, res) {
       return res.status(400).send('El pedido ya está cobrado');
     }
 
+    const { cartTotals, DEFAULT_TAX_RATE } = require('../utils/tax');
+    const cardExtraIva = method === 'card' && Boolean(req.body?.cardExtraIva);
+    const totals = cartTotals(existing.items || [], {
+      discountPercent: existing.discountPercent || 0,
+      taxRate: existing.taxRate || DEFAULT_TAX_RATE,
+      cardExtraIva,
+    });
+    const deliveryFee = Number(existing.deliveryFee || 0);
+    const total = Number((totals.total + deliveryFee).toFixed(2));
+
     const updated = await db.UpdateOrder(
       req.params.id,
       {
@@ -112,6 +122,10 @@ async function pay(req, res) {
         paidAt: new Date(),
         updatedAt: new Date(),
         cashSessionId: session.id,
+        tax: totals.tax,
+        cardExtraIva,
+        cardExtraTax: totals.cardExtraTax,
+        total,
       },
       req.tenantId
     );

@@ -3,7 +3,7 @@ const crypto = require('crypto');
 
 const ROLES = ['admin', 'hosstess', 'waiter', 'kitchen', 'cashier', 'platform_admin'];
 const TENANT_ROLES = ['admin', 'hosstess', 'waiter', 'kitchen', 'cashier'];
-const PLANS = ['basic', 'pro'];
+const PLANS = ['basic', 'growth', 'pro'];
 const BILLING_STATUSES = ['trialing', 'active', 'past_due', 'suspended'];
 const TRIAL_DAYS = 14;
 
@@ -19,6 +19,7 @@ function createTenantDoc(name = 'Mi negocio') {
     name,
     plan: 'basic',
     billingStatus: 'trialing',
+    billingInterval: 'month',
     trialEndsAt: trialEndsFrom(now),
     mpPreapprovalId: null,
     mpPayerEmail: null,

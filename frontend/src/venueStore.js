@@ -5,14 +5,14 @@ const STORAGE_KEY = "timber_venue_settings";
 
 const defaultSettings = {
   businessName: "",
-  businessType: "restaurant",
+  businessType: "abarrotes",
   address: "",
   phone: "",
   logoUrl: "/logo.svg",
-  primaryColor: "#1A4A38",
-  accentColor: "#B8956C",
+  primaryColor: "#1E5AA8",
+  accentColor: "#E08A1E",
   timezone: "America/Mexico_City",
-  initialTables: 8,
+  initialTables: 0,
   setupCompleted: false,
 };
 

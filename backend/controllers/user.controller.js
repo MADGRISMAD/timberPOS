@@ -35,7 +35,7 @@ const CreateUser = async (req, res) => {
     await db.CreateSettings({
       tenantId,
       businessName: tenant.name,
-      businessType: 'restaurant',
+      businessType: 'abarrotes',
       address: '',
       phone: value.cellphone || '',
       logoUrl: '/logo.svg',

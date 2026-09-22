@@ -16,8 +16,10 @@ async function getStatus(req, res) {
   try {
     const tenant = await db.GetTenantById(req.tenantId);
     if (!tenant) return res.status(404).send('Tenant no encontrado');
+    const plan = tenant.plan || 'basic';
     return res.status(200).json({
-      plan: tenant.plan || 'basic',
+      plan,
+      billingInterval: tenant.billingInterval || 'month',
       billingStatus: tenant.billingStatus || 'trialing',
       trialEndsAt: tenant.trialEndsAt || null,
       trialDaysLeft: daysLeft(tenant.trialEndsAt),
@@ -25,6 +27,8 @@ async function getStatus(req, res) {
       active: isSubscriptionActive(tenant),
       mpConfigured: mp.hasMpConfig(),
       mpPreapprovalId: tenant.mpPreapprovalId || null,
+      aiQuota: mp.planAiQuota(plan),
+      aiQuotaLabel: mp.formatAiQuota(mp.planAiQuota(plan)),
     });
   } catch (err) {
     console.error(err);
@@ -35,8 +39,9 @@ async function getStatus(req, res) {
 async function checkout(req, res) {
   try {
     const plan = String(req.body?.plan || 'basic');
+    const interval = String(req.body?.interval || 'month') === 'year' ? 'year' : 'month';
     if (!PLANS.includes(plan)) {
-      return res.status(400).send('plan debe ser basic o pro');
+      return res.status(400).send('plan debe ser basic, growth o pro');
     }
 
     const tenant = await db.GetTenantById(req.tenantId);
@@ -47,7 +52,6 @@ async function checkout(req, res) {
       tenant.mpPayerEmail ||
       null;
 
-    // Resolve admin email if needed
     let email = payerEmail;
     if (!email) {
       const user = await db.FindUserByUsername(req.user.username);
@@ -61,11 +65,13 @@ async function checkout(req, res) {
       plan,
       tenantId: req.tenantId,
       payerEmail: email,
-      externalReference: `${req.tenantId}:${plan}`,
+      interval,
+      externalReference: `${req.tenantId}:${plan}:${interval}`,
     });
 
     await db.UpdateTenant(req.tenantId, {
       plan,
+      billingInterval: interval,
       mpPreapprovalId: preapproval.id || null,
       mpPayerEmail: email,
     });
@@ -73,6 +79,8 @@ async function checkout(req, res) {
     return res.status(200).json({
       mock: Boolean(preapproval.mock),
       preapprovalId: preapproval.id,
+      interval,
+      amount: preapproval.amount || mp.planPrice(plan, interval),
       init_point: preapproval.init_point || preapproval.sandbox_init_point,
       sandbox_init_point: preapproval.sandbox_init_point || preapproval.init_point,
     });
@@ -89,14 +97,17 @@ async function devActivate(req, res) {
       return res.status(404).send('Not found');
     }
     const plan = String(req.body?.plan || 'basic');
+    const interval = String(req.body?.interval || 'month') === 'year' ? 'year' : 'month';
     if (!PLANS.includes(plan)) {
-      return res.status(400).send('plan debe ser basic o pro');
+      return res.status(400).send('plan debe ser basic, growth o pro');
     }
     const periodEnd = new Date();
-    periodEnd.setMonth(periodEnd.getMonth() + 1);
+    if (interval === 'year') periodEnd.setFullYear(periodEnd.getFullYear() + 1);
+    else periodEnd.setMonth(periodEnd.getMonth() + 1);
 
     const updated = await db.UpdateTenant(req.tenantId, {
       plan,
+      billingInterval: interval,
       billingStatus: 'active',
       currentPeriodEnd: periodEnd,
       suspendedAt: null,
@@ -107,6 +118,7 @@ async function devActivate(req, res) {
     return res.status(200).json({
       ok: true,
       plan: updated.plan,
+      billingInterval: interval,
       billingStatus: updated.billingStatus,
       currentPeriodEnd: updated.currentPeriodEnd,
     });
@@ -148,15 +160,17 @@ async function webhook(req, res) {
           mpPreapprovalId: String(dataId),
         };
         if (billingStatus === 'active') {
+          const parts = String(pre.external_reference || '').split(':');
+          const plan = parts[1];
+          const interval = parts[2] === 'year' ? 'year' : 'month';
           const periodEnd = new Date();
-          periodEnd.setMonth(periodEnd.getMonth() + 1);
+          if (interval === 'year') periodEnd.setFullYear(periodEnd.getFullYear() + 1);
+          else periodEnd.setMonth(periodEnd.getMonth() + 1);
           patch.currentPeriodEnd = periodEnd;
+          patch.billingInterval = interval;
           patch.suspendedAt = null;
           patch.suspendedReason = null;
-          if (pre.external_reference) {
-            const plan = String(pre.external_reference).split(':')[1];
-            if (PLANS.includes(plan)) patch.plan = plan;
-          }
+          if (PLANS.includes(plan)) patch.plan = plan;
         }
         if (billingStatus === 'suspended') {
           patch.suspendedAt = new Date();

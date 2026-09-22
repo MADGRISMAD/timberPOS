@@ -5,6 +5,7 @@ import { createVuetify } from "vuetify";
 import * as components from "vuetify/components";
 import * as directives from "vuetify/directives";
 import "./index.css";
+import "./breakpoints.css";
 import { fetchVenueSettings, isSetupComplete } from "./venueStore";
 import "./themeStore";
 import {
@@ -15,16 +16,14 @@ import {
 } from "./authStore";
 import "./apiService";
 
-import main from "./views/MainComponent.vue";
 import Login from "./views/LoginComponent.vue";
 import Register from "./views/RegisterComponent.vue";
+import LandingView from "./views/LandingView.vue";
 import MenuView from "./views/MenuComponent.vue";
-import waitlist from "./views/WaitListComponent.vue";
 import SetupWizard from "./views/SetupWizard.vue";
 import DashboardView from "./views/DashboardView.vue";
 import StaffView from "./views/StaffView.vue";
 import OrdersView from "./views/OrdersView.vue";
-import KitchenView from "./views/KitchenView.vue";
 import SettingsView from "./views/SettingsView.vue";
 import InviteAcceptView from "./views/InviteAcceptView.vue";
 import ForgotPasswordView from "./views/ForgotPasswordView.vue";
@@ -41,20 +40,25 @@ const authMeta = (roles?: string[]) => ({
 });
 
 const routes: RouteRecordRaw[] = [
-  { path: "/", name: "login", component: Login },
+  { path: "/", name: "landing", component: LandingView },
+  { path: "/login", name: "login", component: Login },
   { path: "/register", name: "register", component: Register },
   { path: "/forgot", name: "forgot", component: ForgotPasswordView },
   { path: "/reset/:token", name: "reset", component: ResetPasswordView },
   { path: "/invite/:token", name: "invite", component: InviteAcceptView },
   { path: "/setup", name: "setup", component: SetupWizard, meta: { requiresAuth: true } },
   { path: "/dashboard", name: "dashboard", component: DashboardView, meta: authMeta(["admin"]) },
-  { path: "/main", name: "main", component: main, meta: authMeta(["admin", "hosstess", "waiter", "cashier"]) },
-  { path: "/menu", name: "menu", component: MenuView, meta: authMeta(["admin", "waiter", "cashier"]) },
-  { path: "/meseros", redirect: "/menu" },
+  // POS abarrotes
+  { path: "/pos", name: "pos", component: MenuView, meta: authMeta(["admin", "cashier", "waiter", "hosstess", "kitchen"]), props: { initialMode: "pos" } },
+  { path: "/products", name: "products", component: MenuView, meta: authMeta(["admin"]), props: { initialMode: "manage" } },
+  // Redirects legacy restaurant routes
+  { path: "/main", redirect: "/pos" },
+  { path: "/menu", redirect: "/pos" },
+  { path: "/meseros", redirect: "/pos" },
+  { path: "/kitchen", redirect: "/orders" },
+  { path: "/waitlist", redirect: "/dashboard" },
   { path: "/staff", name: "staff", component: StaffView, meta: authMeta(["admin"]) },
   { path: "/orders", name: "orders", component: OrdersView, meta: authMeta(["admin", "cashier"]) },
-  { path: "/kitchen", name: "kitchen", component: KitchenView, meta: authMeta(["admin", "kitchen", "cashier", "waiter"]) },
-  { path: "/waitlist", name: "waitlist", component: waitlist, meta: authMeta(["admin", "hosstess"]) },
   { path: "/settings", name: "settings", component: SettingsView, meta: authMeta(["admin"]) },
   {
     path: "/billing",
@@ -72,7 +76,7 @@ const routes: RouteRecordRaw[] = [
     path: "/print/order/:id",
     name: "printOrder",
     component: PrintOrderView,
-    meta: { requiresAuth: true, roles: ["admin", "cashier", "waiter", "kitchen"] },
+    meta: { requiresAuth: true, roles: ["admin", "cashier"] },
   },
   {
     path: "/print/cash/:id",
@@ -85,9 +89,13 @@ const routes: RouteRecordRaw[] = [
 const router = createRouter({
   history: createWebHistory(),
   routes,
+  scrollBehavior(to) {
+    if (to.hash) return { el: to.hash, behavior: "smooth" };
+    return { top: 0 };
+  },
 });
 
-const publicNames = new Set(["login", "register", "forgot", "reset", "invite"]);
+const publicNames = new Set(["landing", "login", "register", "forgot", "reset", "invite"]);
 
 router.beforeEach(async (to) => {
   if (publicNames.has(String(to.name))) {

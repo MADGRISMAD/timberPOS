@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { cartTotals, DEFAULT_TAX_RATE } = require('../utils/tax');
 
 const orderStatuses = ['pending', 'preparing', 'ready', 'served', 'cancelled'];
 const paymentMethods = ['cash', 'card', 'transfer', 'other'];
@@ -10,26 +11,44 @@ function normalizeOrder(body = {}) {
         name: item.name || 'Producto',
         price: Number(item.price || 0),
         quantity: Number(item.quantity || 1),
+        priceIncludesTax: Boolean(item.priceIncludesTax),
         notes: item.notes || '',
       }))
     : [];
 
-  const subtotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
-  const taxRate = 0.08;
-  const deliveryFee = body.modality === 'takeaway' ? Number(body.deliveryFee ?? 50) : 0;
-  const tax = Number((subtotal * taxRate).toFixed(2));
-  const total = Number((subtotal + tax + deliveryFee).toFixed(2));
+  const modality =
+    body.modality === 'takeaway'
+      ? 'takeaway'
+      : body.modality === 'dine-in'
+        ? 'dine-in'
+        : 'retail';
+  const deliveryFee =
+    modality === 'takeaway' ? Number(body.deliveryFee ?? 0) : 0;
+
+  const totals = cartTotals(items, {
+    discountPercent: body.discountPercent,
+    taxRate: DEFAULT_TAX_RATE,
+    cardExtraIva: false,
+  });
+
+  const total = Number((totals.total + deliveryFee).toFixed(2));
 
   return {
     tableId: body.tableId || null,
-    tableName: body.tableName || body.mesa || 'Sin mesa',
+    tableName: body.tableName || body.mesa || (modality === 'retail' ? 'Mostrador' : 'Sin mesa'),
     items,
-    modality: body.modality === 'takeaway' ? 'takeaway' : 'dine-in',
+    modality,
     status: orderStatuses.includes(body.status) ? body.status : 'pending',
     paymentStatus: body.paymentStatus === 'paid' ? 'paid' : 'unpaid',
     paymentMethod: paymentMethods.includes(body.paymentMethod) ? body.paymentMethod : null,
-    subtotal,
-    tax,
+    taxRate: totals.taxRate,
+    subtotal: totals.subtotal,
+    subtotalNet: totals.subtotalNet,
+    discountPercent: totals.discountPercent,
+    discountAmount: totals.discountAmount,
+    tax: totals.tax,
+    cardExtraTax: 0,
+    cardExtraIva: false,
     deliveryFee,
     total,
     notes: body.notes || body.description || '',

@@ -1,11 +1,11 @@
 /** Etiquetas de UI en español (valores internos del API se mantienen en inglés). */
 
 export const orderStatusLabel = {
-  pending: "Pendiente",
-  preparing: "Preparando",
-  ready: "Listo",
-  served: "Servido",
-  cancelled: "Cancelado",
+  pending: "Registrada",
+  preparing: "En proceso",
+  ready: "Lista",
+  served: "Entregada",
+  cancelled: "Cancelada",
 };
 
 export const paymentStatusLabel = {
@@ -14,16 +14,17 @@ export const paymentStatusLabel = {
 };
 
 export const modalityLabel = {
-  "dine-in": "En salón",
-  takeaway: "Para llevar",
+  retail: "Mostrador",
+  "dine-in": "Mostrador",
+  takeaway: "entrega",
 };
 
 export const roleLabel = {
   admin: "Admin",
   hosstess: "Hostess",
-  waiter: "Mesero",
-  kitchen: "Cocina",
-  cashier: "Caja",
+  waiter: "Vendedor",
+  kitchen: "Almacén",
+  cashier: "Cajero",
   platform_admin: "Platform",
 };
 

@@ -2,8 +2,8 @@
   <AppShell>
     <div class="staff-page">
       <div class="toolbar">
-        <p>Gestiona meseros y su disponibilidad en el turno.</p>
-        <button type="button" class="btn-primary" @click="showForm = true">Agregar mesero</button>
+        <p>Gestiona empleados de la tienda y su disponibilidad en turno.</p>
+        <button type="button" class="btn-primary" @click="showForm = true">Agregar empleado</button>
       </div>
 
       <div v-if="error" class="error">{{ error }}</div>
@@ -29,7 +29,7 @@
       <Teleport to="body">
         <div v-if="showForm" class="modal-bg" @click.self="showForm = false">
           <form class="modal" @submit.prevent="create" role="dialog" aria-modal="true" aria-labelledby="staff-form-title">
-            <h3 id="staff-form-title">Nuevo mesero</h3>
+            <h3 id="staff-form-title">Nuevo empleado</h3>
             <div class="modal-body">
               <label>Nombre<input v-model="form.name" required autocomplete="given-name" /></label>
               <label>Apellido<input v-model="form.lastName" required autocomplete="family-name" /></label>
@@ -110,7 +110,7 @@ async function create() {
     form.lastName = "";
     form.cellphone = "";
   } catch (e) {
-    error.value = e.response?.data || "No se pudo crear el mesero.";
+    error.value = e.response?.data || "No se pudo crear el empleado.";
   } finally {
     saving.value = false;
   }

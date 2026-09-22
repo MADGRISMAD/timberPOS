@@ -2,32 +2,32 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Timber fixed system palette — only light / dark */
+/* Retail POS palette — azul + ámbar (estilo Mr Tienda, sin WinForms) */
 :root,
 html[data-theme="light"] {
-  --timber-primary: #1a4a38;
-  --timber-primary-soft: #e4efe9;
-  --timber-accent: #9a7b52;
-  --timber-ink: #141a17;
-  --timber-muted: #66706a;
-  --timber-line: rgba(20, 26, 23, 0.1);
-  --timber-surface: #ece8e1;
-  --timber-panel: #fffcf8;
-  --timber-panel-elevated: #ffffff;
-  --timber-topbar: #0f241c;
-  --timber-topbar-text: #eef3f0;
-  --timber-dock: #fffcf8;
-  --timber-dock-text: #5c675f;
-  --timber-danger: #b42318;
+  --timber-primary: #1e5aa8;
+  --timber-primary-soft: #e7f0fb;
+  --timber-accent: #e08a1e;
+  --timber-ink: #1a2332;
+  --timber-muted: #64748b;
+  --timber-line: rgba(26, 35, 50, 0.1);
+  --timber-surface: #eef1f6;
+  --timber-panel: #ffffff;
+  --timber-panel-elevated: #f7f9fc;
+  --timber-topbar: #123056;
+  --timber-topbar-text: #f0f4fa;
+  --timber-dock: #ffffff;
+  --timber-dock-text: #5b6b7c;
+  --timber-danger: #c62828;
   --timber-danger-soft: #fdecea;
-  --timber-success: #1b5e20;
-  --timber-success-soft: #d9f0df;
+  --timber-success: #2e7d32;
+  --timber-success-soft: #e8f5e9;
   --timber-warning: #e65100;
   --timber-warning-soft: #fff3e0;
-  --timber-free: #1f7a45;
-  --timber-busy: #c0392b;
-  --timber-on-primary: #f8f6f2;
-  --timber-shadow: 0 1px 2px rgba(18, 24, 22, 0.04), 0 12px 32px rgba(18, 24, 22, 0.07);
+  --timber-free: #1e5aa8;
+  --timber-busy: #c62828;
+  --timber-on-primary: #ffffff;
+  --timber-shadow: 0 1px 2px rgba(18, 32, 56, 0.05), 0 12px 28px rgba(18, 32, 56, 0.08);
   --timber-radius: 1rem;
   --font-sans: "Figtree", "Segoe UI", system-ui, sans-serif;
   --font-display: "Figtree", "Segoe UI", system-ui, sans-serif;
@@ -35,29 +35,29 @@ html[data-theme="light"] {
 }
 
 html[data-theme="dark"] {
-  --timber-primary: #3d9a74;
-  --timber-primary-soft: rgba(61, 154, 116, 0.18);
-  --timber-accent: #c4a574;
-  --timber-ink: #eef2ef;
-  --timber-muted: #9aa59e;
-  --timber-line: rgba(238, 242, 239, 0.12);
-  --timber-surface: #101612;
-  --timber-panel: #1a221d;
-  --timber-panel-elevated: #222c26;
-  --timber-topbar: #0a1410;
-  --timber-topbar-text: #eef3f0;
-  --timber-dock: #151c18;
-  --timber-dock-text: #a7b2ab;
+  --timber-primary: #5b9ae8;
+  --timber-primary-soft: rgba(91, 154, 232, 0.16);
+  --timber-accent: #f0a94a;
+  --timber-ink: #e8eef6;
+  --timber-muted: #9aabbf;
+  --timber-line: rgba(232, 238, 246, 0.12);
+  --timber-surface: #0c121c;
+  --timber-panel: #151d2a;
+  --timber-panel-elevated: #1c2636;
+  --timber-topbar: #0a1220;
+  --timber-topbar-text: #e8eef6;
+  --timber-dock: #121a27;
+  --timber-dock-text: #9aabbf;
   --timber-danger: #f97066;
   --timber-danger-soft: rgba(249, 112, 102, 0.16);
   --timber-success: #6ce9a6;
   --timber-success-soft: rgba(108, 233, 166, 0.14);
   --timber-warning: #fdb022;
   --timber-warning-soft: rgba(253, 176, 34, 0.16);
-  --timber-free: #2f9e5b;
+  --timber-free: #5b9ae8;
   --timber-busy: #e4574d;
-  --timber-on-primary: #f8f6f2;
-  --timber-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 16px 40px rgba(0, 0, 0, 0.35);
+  --timber-on-primary: #0a1220;
+  --timber-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 16px 40px rgba(0, 0, 0, 0.4);
   color-scheme: dark;
 }
 
@@ -70,7 +70,22 @@ html[data-theme="dark"] {
 html,
 body,
 #app {
-  min-height: 100%;
+  height: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+  margin: 0;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+}
+
+#app > * {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
 }
 
 body {
@@ -84,6 +99,7 @@ body {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   transition: background 0.2s ease, color 0.2s ease;
+  overscroll-behavior: none;
 }
 
 button,
@@ -104,8 +120,8 @@ textarea {
 
 .timber-waitlist-bg {
   background:
-    radial-gradient(ellipse 70% 50% at 20% 20%, rgba(154, 123, 82, 0.25), transparent 55%),
-    linear-gradient(155deg, var(--timber-topbar) 0%, #1a3f32 55%, #243d33 100%);
+    radial-gradient(ellipse 70% 50% at 20% 20%, rgba(224, 138, 30, 0.18), transparent 55%),
+    linear-gradient(155deg, var(--timber-topbar) 0%, #1a4578 55%, #1e5aa8 100%);
 }
 
 .t-page {
@@ -161,8 +177,8 @@ textarea {
 
 .t-btn-primary {
   background: var(--timber-primary);
-  color: #f8f6f2;
-  box-shadow: 0 8px 20px rgba(26, 74, 56, 0.22);
+  color: var(--timber-on-primary);
+  box-shadow: 0 8px 20px rgba(30, 90, 168, 0.22);
 }
 
 .t-btn-ghost {
@@ -217,7 +233,7 @@ textarea {
 .t-select:focus {
   outline: none;
   border-color: var(--timber-primary);
-  box-shadow: 0 0 0 3px rgba(26, 74, 56, 0.14);
+  box-shadow: 0 0 0 3px rgba(30, 90, 168, 0.16);
 }
 
 .t-modal-bg {
@@ -228,7 +244,7 @@ textarea {
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  background: rgba(10, 16, 14, 0.48);
+  background: rgba(10, 18, 32, 0.5);
   backdrop-filter: blur(6px);
   animation: t-fade-up 0.2s ease;
 }

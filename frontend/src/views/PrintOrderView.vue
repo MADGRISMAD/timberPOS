@@ -1,133 +1,90 @@
 <template>
   <div class="wrap">
-    <button type="button" class="no-print" @click="print">Imprimir ticket</button>
+    <div class="no-print bar">
+      <button type="button" class="btn" @click="print">Imprimir</button>
+      <button type="button" class="btn ghost" @click="closeWin">Cerrar</button>
+    </div>
 
-    <div class="ticket" :class="mode">
+    <div class="ticket">
       <p v-if="loading" class="center">Cargando…</p>
       <p v-else-if="err" class="center err">{{ err }}</p>
 
       <template v-else-if="order">
-        <!-- ENCABEZADO NEGOCIO -->
         <div class="center head">
           <p class="shop">{{ businessName }}</p>
           <p class="subtype">{{ typeLabel }}</p>
           <p v-if="address" class="muted">{{ address }}</p>
-          <p v-if="phone" class="muted">TEL: {{ phone }}</p>
+          <p v-if="phone" class="muted">Tel. {{ phone }}</p>
         </div>
 
-        <p class="sep">================================</p>
-        <p class="center banner">
-          {{ mode === 'kitchen' ? 'COMANDA DE COCINA' : 'CUENTA / RECIBO' }}
-        </p>
-        <p class="sep">================================</p>
+        <div class="rule"></div>
+        <p class="center title">COMPROBANTE DE VENTA</p>
+        <div class="rule"></div>
 
-        <!-- DATOS DEL SERVICIO -->
-        <p>FOLIO.......: {{ shortId(order.id) }}</p>
-        <p>MESA........: {{ (order.tableName || 'SIN MESA').toUpperCase() }}</p>
-        <p>SERVICIO....: {{ modalityText(order.modality).toUpperCase() }}</p>
-        <p>APERTURA....: {{ formatDate(order.createdAt) }}</p>
-        <p v-if="mode !== 'kitchen' && order.paidAt">
-          COBRO.......: {{ formatDate(order.paidAt) }}
-        </p>
-        <p v-if="cashier">ATENDIO.....: {{ cashier.toUpperCase() }}</p>
-        <p>ARTICULOS...: {{ itemCount }}</p>
+        <div class="meta-block">
+          <div class="meta-row"><span>Folio</span><strong>{{ shortId(order.id) }}</strong></div>
+          <div class="meta-row"><span>Fecha</span><strong>{{ formatDate(order.createdAt) }}</strong></div>
+          <div v-if="order.paidAt" class="meta-row"><span>Cobro</span><strong>{{ formatDate(order.paidAt) }}</strong></div>
+          <div class="meta-row"><span>Cajero</span><strong>{{ (cashier || '—').toUpperCase() }}</strong></div>
+          <div class="meta-row"><span>Arts.</span><strong>{{ itemCount }}</strong></div>
+        </div>
 
-        <p class="sep">--------------------------------</p>
+        <div class="rule dashed"></div>
 
-        <!-- COCINA -->
-        <template v-if="mode === 'kitchen'">
-          <p class="center section">*** PLATILLOS ***</p>
-          <div v-for="(item, i) in order.items || []" :key="i" class="k-item">
-            <p class="k-qty">{{ padQty(item.quantity) }}  {{ (item.name || '').toUpperCase() }}</p>
-            <p v-if="item.notes" class="note">    NOTA: {{ item.notes }}</p>
+        <div class="cols hdr">
+          <span class="c-qty">Cant</span>
+          <span class="c-name">Descripción</span>
+          <span class="c-imp">Importe</span>
+        </div>
+        <div class="rule thin"></div>
+
+        <div v-for="(item, i) in order.items || []" :key="i" class="item">
+          <div class="cols">
+            <span class="c-qty">{{ formatQty(item.quantity) }}</span>
+            <span class="c-name">
+              {{ item.name }}
+              <small>{{ moneyPlain(item.price) }} c/u{{ item.priceIncludesTax ? ' · bruto' : '' }}</small>
+            </span>
+            <span class="c-imp">{{ moneyPlain(lineGross(item)) }}</span>
           </div>
-          <template v-if="order.notes">
-            <p class="sep">--------------------------------</p>
-            <p class="note">ORDEN: {{ order.notes }}</p>
-          </template>
-          <p class="sep">================================</p>
-          <p class="center big">ENVIAR A COCINA</p>
-          <p class="center muted">{{ formatDate(new Date()) }}</p>
+        </div>
+
+        <div class="rule dashed"></div>
+
+        <div class="totals">
+          <div class="row"><span>Subtotal</span><span>{{ moneyPlain(order.subtotal) }}</span></div>
+          <div v-if="order.discountAmount" class="row">
+            <span>Descuento {{ order.discountPercent || 0 }}%</span>
+            <span>-{{ moneyPlain(order.discountAmount) }}</span>
+          </div>
+          <div class="row"><span>IVA (8%)</span><span>{{ moneyPlain(order.tax) }}</span></div>
+          <div v-if="order.cardExtraTax" class="row">
+            <span>IVA extra tarjeta</span>
+            <span>{{ moneyPlain(order.cardExtraTax) }}</span>
+          </div>
+        </div>
+
+        <div class="rule"></div>
+        <div class="row grand">
+          <span>TOTAL</span>
+          <span>$ {{ moneyPlain(order.total) }}</span>
+        </div>
+        <div class="rule"></div>
+
+        <template v-if="order.paymentStatus === 'paid'">
+          <p class="center pay-label">{{ payMethodLabel(order.paymentMethod) }}</p>
+          <p class="center paid">PAGADO</p>
         </template>
+        <p v-else class="center unpaid">PENDIENTE DE PAGO</p>
 
-        <!-- CUENTA CLIENTE -->
-        <template v-else>
-          <div class="cols hdr">
-            <span class="c-qty">CNT</span>
-            <span class="c-name">DESCRIPCION</span>
-            <span class="c-pu">P.U.</span>
-            <span class="c-imp">IMP.</span>
-          </div>
-          <p class="sep thin">--------------------------------</p>
-
-          <div v-for="(item, i) in order.items || []" :key="i" class="item">
-            <div class="cols">
-              <span class="c-qty">{{ item.quantity }}</span>
-              <span class="c-name">{{ truncate(item.name, 14) }}</span>
-              <span class="c-pu">{{ moneyPlain(item.price) }}</span>
-              <span class="c-imp">{{ moneyPlain(item.price * item.quantity) }}</span>
-            </div>
-            <p v-if="item.notes" class="note">  * {{ item.notes }}</p>
-          </div>
-
-          <p class="sep">--------------------------------</p>
-
-          <div class="row"><span>SUBTOTAL</span><span>$ {{ moneyPlain(order.subtotal) }}</span></div>
-          <div class="row"><span>I.V.A. (8%)</span><span>$ {{ moneyPlain(order.tax) }}</span></div>
-          <div v-if="order.deliveryFee" class="row">
-            <span>ENVIO / REPARTO</span>
-            <span>$ {{ moneyPlain(order.deliveryFee) }}</span>
-          </div>
-
-          <p class="sep">================================</p>
-          <div class="row total">
-            <span>TOTAL A PAGAR</span>
-            <span>$ {{ moneyPlain(order.total) }}</span>
-          </div>
-          <p class="sep">================================</p>
-
-          <!-- PROPINA SUGERIDA -->
-          <p class="center section">PROPINA SUGERIDA</p>
-          <div class="row"><span>10%</span><span>$ {{ moneyPlain(order.total * 0.1) }}</span></div>
-          <div class="row"><span>15%</span><span>$ {{ moneyPlain(order.total * 0.15) }}</span></div>
-          <div class="row"><span>20%</span><span>$ {{ moneyPlain(order.total * 0.2) }}</span></div>
-          <p class="muted center tip-line">Propina: $ ______</p>
-
-          <p class="sep">--------------------------------</p>
-
-          <!-- PAGO -->
-          <template v-if="order.paymentStatus === 'paid'">
-            <p class="center section">FORMA DE PAGO</p>
-            <div class="row">
-              <span>{{ payMethodLabel(order.paymentMethod) }}</span>
-              <span>$ {{ moneyPlain(order.total) }}</span>
-            </div>
-            <p class="center paid">** PAGADO **</p>
-          </template>
-          <template v-else>
-            <p class="center section">PENDIENTE DE PAGO</p>
-            <div class="row"><span>EFECTIVO</span><span>$ ______</span></div>
-            <div class="row"><span>TARJETA</span><span>$ ______</span></div>
-            <div class="row"><span>CAMBIO</span><span>$ ______</span></div>
-          </template>
-
-          <template v-if="order.notes">
-            <p class="sep">--------------------------------</p>
-            <p class="note">OBS: {{ order.notes }}</p>
-          </template>
-
-          <p class="sep">================================</p>
-          <p class="center thanks">¡GRACIAS POR SU VISITA!</p>
-          <p class="center muted">Le esperamos pronto</p>
-          <p class="sep">--------------------------------</p>
-          <p class="center legal">
-            Este comprobante no es
-            factura fiscal. Solicite
-            factura en caja si aplica.
-          </p>
-          <p class="center tiny">{{ businessName }}</p>
-          <p class="center tiny">Powered by Timber POS</p>
-        </template>
+        <div class="rule dashed"></div>
+        <p class="center thanks">¡Gracias por su compra!</p>
+        <p class="center legal">
+          Documento informativo. No es factura fiscal.
+          Solicite factura en caja si la requiere.
+        </p>
+        <p class="center folio-bar">*{{ shortId(order.id) }}*</p>
+        <p class="center tiny">Timber POS</p>
       </template>
     </div>
   </div>
@@ -139,16 +96,15 @@ import { useRoute } from "vue-router";
 import { apiService } from "../apiService";
 import { venueStore, fetchVenueSettings } from "../venueStore";
 import { authStore } from "../authStore";
-import { labelOf, modalityLabel } from "../labels";
+import { lineBreakdown, TAX_RATE } from "../tax";
 
 const route = useRoute();
 const order = ref(null);
 const loading = ref(true);
 const err = ref("");
-const mode = computed(() => (route.query.mode === "kitchen" ? "kitchen" : "receipt"));
 
 const businessName = computed(() =>
-  (venueStore.businessName || "RESTAURANTE").toUpperCase()
+  (venueStore.businessName || "TIENDA").toUpperCase()
 );
 const address = computed(() => venueStore.address || "");
 const phone = computed(() => venueStore.phone || "");
@@ -159,13 +115,16 @@ const itemCount = computed(() =>
 
 const typeLabel = computed(() => {
   const map = {
+    abarrotes: "ABARROTES / MINISÚPER",
+    convenience: "TIENDA DE CONVENIENCIA",
+    pharmacy: "FARMACIA",
+    other: "COMERCIO",
     restaurant: "RESTAURANTE",
     cafe: "CAFÉ",
     bar: "BAR",
-    hotel: "HOTEL / RESTAURANTE",
-    other: "ESTABLECIMIENTO",
+    hotel: "HOTEL",
   };
-  return map[venueStore.businessType] || "RESTAURANTE";
+  return map[venueStore.businessType] || "ABARROTES / MINISÚPER";
 });
 
 const payLabels = {
@@ -178,14 +137,18 @@ const payLabels = {
 function moneyPlain(n) {
   return Number(n || 0).toFixed(2);
 }
+function formatQty(q) {
+  const n = Number(q || 0);
+  return Number.isInteger(n) ? String(n) : n.toFixed(3);
+}
+function lineGross(item) {
+  return lineBreakdown(item.price, item.quantity, item.priceIncludesTax, TAX_RATE).gross;
+}
 function formatDate(d) {
   if (!d) return "";
   const dt = new Date(d);
   const p = (x) => String(x).padStart(2, "0");
   return `${p(dt.getDate())}/${p(dt.getMonth() + 1)}/${dt.getFullYear()} ${p(dt.getHours())}:${p(dt.getMinutes())}`;
-}
-function modalityText(m) {
-  return labelOf(modalityLabel, m);
 }
 function payMethodLabel(m) {
   return payLabels[m] || String(m || "—").toUpperCase();
@@ -193,15 +156,11 @@ function payMethodLabel(m) {
 function shortId(id) {
   return String(id || "").slice(-8).toUpperCase();
 }
-function truncate(s, n) {
-  const t = String(s || "");
-  return t.length > n ? `${t.slice(0, n - 1)}.` : t;
-}
-function padQty(q) {
-  return String(q).padStart(2, " ");
-}
 function print() {
   window.print();
+}
+function closeWin() {
+  window.close();
 }
 
 onMounted(async () => {
@@ -222,121 +181,147 @@ onMounted(async () => {
 <style scoped>
 .wrap {
   min-height: 100vh;
-  background: #e8e8e8;
+  background: #d8dee8;
   padding: 1rem;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.75rem;
 }
+.no-print.bar { display: flex; gap: 0.5rem; }
+.btn {
+  border: none;
+  background: #1e5aa8;
+  color: #fff;
+  border-radius: 0.55rem;
+  padding: 0.65rem 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: var(--font-sans, system-ui, sans-serif);
+}
+.btn.ghost {
+  background: #fff;
+  color: #1a2332;
+  border: 1px solid #c5cedb;
+}
+
 .ticket {
   width: 80mm;
   max-width: 100%;
   background: #fff;
-  color: #000;
-  padding: 4mm 3.5mm 8mm;
+  color: #111;
+  padding: 5mm 4mm 10mm;
   font-family: "Courier New", Courier, monospace;
   font-size: 11px;
-  line-height: 1.32;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.15);
+  line-height: 1.35;
+  box-shadow: 0 8px 28px rgba(18, 32, 56, 0.18);
 }
 .center { text-align: center; }
-.head { margin-bottom: 2px; }
 .shop {
   margin: 0;
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-}
-.subtype {
-  margin: 2px 0 4px;
-  font-size: 10px;
-  letter-spacing: 0.12em;
-}
-.banner {
-  margin: 0;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-}
-.section {
-  margin: 4px 0;
+  font-size: 16px;
   font-weight: 700;
   letter-spacing: 0.04em;
 }
-.sep {
-  margin: 5px 0;
-  white-space: nowrap;
-  overflow: hidden;
+.subtype {
+  margin: 3px 0 5px;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  color: #333;
 }
-.sep.thin { margin: 2px 0; }
-.muted { color: #222; font-size: 10px; }
+.muted { margin: 0; font-size: 10px; color: #333; }
+.title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+.rule {
+  border: none;
+  border-top: 1.5px solid #111;
+  margin: 6px 0;
+  height: 0;
+}
+.rule.dashed { border-top-style: dashed; border-top-width: 1px; }
+.rule.thin { margin: 3px 0; border-top-width: 1px; }
+
+.meta-block { display: grid; gap: 2px; }
+.meta-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-variant-numeric: tabular-nums;
+}
+.meta-row span { color: #444; }
+.meta-row strong { font-weight: 700; }
+
+.cols {
+  display: grid;
+  grid-template-columns: 2.4rem 1fr 3.2rem;
+  gap: 0.2rem;
+  font-variant-numeric: tabular-nums;
+  align-items: start;
+}
+.cols.hdr { font-weight: 700; font-size: 10px; }
+.c-qty { text-align: left; }
+.c-imp { text-align: right; }
+.c-name { text-align: left; word-break: break-word; }
+.c-name small {
+  display: block;
+  font-size: 9px;
+  color: #555;
+  font-weight: 400;
+}
+.item { margin-bottom: 5px; }
+
+.totals { display: grid; gap: 2px; }
 .row {
   display: flex;
   justify-content: space-between;
   gap: 0.4rem;
   font-variant-numeric: tabular-nums;
 }
-.total {
-  font-size: 13px;
+.grand {
+  font-size: 15px;
   font-weight: 700;
   margin: 2px 0;
 }
-.cols {
-  display: grid;
-  grid-template-columns: 2.2rem 1fr 2.8rem 2.8rem;
-  gap: 0.15rem;
-  font-variant-numeric: tabular-nums;
+.pay-label {
+  margin: 6px 0 2px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
 }
-.cols.hdr { font-weight: 700; font-size: 10px; }
-.c-pu, .c-imp { text-align: right; }
-.c-qty { text-align: left; }
-.item { margin-bottom: 3px; }
-.k-item { margin-bottom: 6px; }
-.k-qty {
+.paid {
   margin: 0;
   font-size: 13px;
   font-weight: 700;
+  letter-spacing: 0.14em;
 }
-.note { margin: 0; font-size: 10px; }
-.tip-line { margin: 6px 0 2px; }
-.paid {
-  margin: 6px 0 0;
+.unpaid {
+  margin: 6px 0;
   font-weight: 700;
   letter-spacing: 0.08em;
 }
 .thanks {
-  margin: 4px 0 2px;
+  margin: 6px 0 4px;
   font-size: 12px;
   font-weight: 700;
 }
 .legal {
   margin: 0;
   font-size: 9px;
-  line-height: 1.35;
-  white-space: pre-line;
+  line-height: 1.4;
+  color: #333;
 }
-.big {
-  margin: 6px 0;
+.folio-bar {
+  margin: 8px 0 2px;
   font-size: 13px;
+  letter-spacing: 0.12em;
   font-weight: 700;
-  letter-spacing: 0.06em;
 }
-.tiny { margin: 2px 0 0; font-size: 9px; }
+.tiny { margin: 2px 0 0; font-size: 9px; color: #666; }
 .err { color: #b42318; }
 p { margin: 0; }
-
-.no-print {
-  border: none;
-  background: #1a4a38;
-  color: #fff;
-  border-radius: 0.55rem;
-  padding: 0.65rem 1rem;
-  font-weight: 700;
-  cursor: pointer;
-  font-family: var(--font-sans);
-}
 
 @media print {
   @page { size: 80mm auto; margin: 0; }

@@ -268,6 +268,15 @@ async function GetFoodById(id, tenantId) {
   if (!filter) return null;
   return withId(await dbConnection.collection('foods').findOne(filter));
 }
+async function GetFoodByBarcode(code, tenantId) {
+  const c = String(code || '').trim();
+  if (!c) return null;
+  const filter = {
+    ...(tenantId ? { tenantId } : {}),
+    $or: [{ barcode: c }, { sku: c }],
+  };
+  return withId(await dbConnection.collection('foods').findOne(filter));
+}
 async function CreateFood(data) {
   const result = await dbConnection.collection('foods').insertOne(data);
   return withId(await dbConnection.collection('foods').findOne({ _id: result.insertedId }));
@@ -413,7 +422,7 @@ module.exports = {
   AddWaitList, GetWaitList, GetWaitListByNumber, DeleteWaitList,
   GetSettings, CreateSettings, UpdateSettings,
   GetMenus, GetMenuById, CreateMenu, UpdateMenu, DeleteMenu,
-  GetFoods, GetFoodById, CreateFood, UpdateFood, DeleteFood,
+  GetFoods, GetFoodById, GetFoodByBarcode, CreateFood, UpdateFood, DeleteFood,
   GetOrders, GetOrderById, CreateOrder, UpdateOrder, GetOrdersByCashSession,
   GetInvites, GetInviteByToken, CreateInvite, UpdateInvite, DeleteInvite,
   GetOpenCashSession, GetCashSessionById, CreateCashSession, UpdateCashSession,

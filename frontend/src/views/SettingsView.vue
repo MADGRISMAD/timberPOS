@@ -13,11 +13,10 @@
           <label>Nombre<input v-model="form.businessName" /></label>
           <label>Tipo
             <select v-model="form.businessType">
-              <option value="restaurant">Restaurante</option>
-              <option value="cafe">Café</option>
-              <option value="bar">Bar</option>
-              <option value="hotel">Hotel</option>
-              <option value="other">Otro</option>
+              <option value="abarrotes">Abarrotes / tienda</option>
+              <option value="convenience">Conveniencia</option>
+              <option value="pharmacy">Farmacia</option>
+              <option value="other">Otro comercio</option>
             </select>
           </label>
           <label>Dirección<input v-model="form.address" /></label>
@@ -68,10 +67,8 @@
           <label>Rol
             <select v-model="invite.role">
               <option value="admin">Admin</option>
-              <option value="hosstess">Hostess</option>
-              <option value="waiter">Mesero</option>
-              <option value="kitchen">Cocina</option>
-              <option value="cashier">Caja</option>
+              <option value="cashier">Cajero</option>
+              <option value="waiter">Vendedor</option>
             </select>
           </label>
           <button type="submit" class="btn-primary" :disabled="inviting">{{ inviting ? 'Enviando…' : 'Enviar invitación' }}</button>
@@ -97,10 +94,8 @@
 
       <section v-else class="panel">
         <h2>Preferencias</h2>
-        <p class="hint">Mesas iniciales de referencia (no crea mesas automáticamente).</p>
-        <label>Mesas iniciales<input v-model.number="form.initialTables" type="number" min="0" max="100" /></label>
-        <button type="button" class="btn-primary" @click="saveBrand">Guardar</button>
-        <router-link to="/setup" class="link">Volver a ejecutar el wizard de configuración</router-link>
+        <p class="hint">Puedes volver a ejecutar el asistente de configuración inicial.</p>
+        <router-link to="/setup" class="link">Volver a ejecutar el wizard</router-link>
       </section>
     </div>
   </AppShell>
@@ -130,7 +125,7 @@ function roleText(r) { return labelOf(roleLabel, r); }
 
 const form = reactive({
   businessName: venueStore.businessName || "",
-  businessType: venueStore.businessType || "restaurant",
+  businessType: venueStore.businessType || "abarrotes",
   address: venueStore.address || "",
   phone: venueStore.phone || "",
   logoUrl: venueStore.logoUrl || "/logo.svg",

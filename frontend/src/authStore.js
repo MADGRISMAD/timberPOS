@@ -57,29 +57,31 @@ export function isPlatformAdmin() {
   return authStore.role === "platform_admin";
 }
 
-/** Rutas permitidas por rol (path names) */
+/** Home y permisos orientados a POS de abarrotes */
 export const roleHome = {
-  admin: "main",
-  hosstess: "main",
-  waiter: "main",
-  kitchen: "kitchen",
-  cashier: "orders",
+  admin: "pos",
+  hosstess: "pos",
+  waiter: "pos",
+  kitchen: "pos",
+  cashier: "pos",
   platform_admin: "platform",
 };
 
 export const routeRoles = {
   dashboard: ["admin"],
-  main: ["admin", "hosstess", "waiter", "cashier"],
-  menu: ["admin", "waiter", "cashier"],
+  pos: ["admin", "cashier", "waiter", "hosstess", "kitchen"],
+  products: ["admin"],
+  menu: ["admin", "cashier", "waiter"],
+  main: ["admin", "cashier"],
   staff: ["admin"],
   orders: ["admin", "cashier"],
-  kitchen: ["admin", "kitchen", "cashier", "waiter"],
-  waitlist: ["admin", "hosstess"],
+  kitchen: ["admin"],
+  waitlist: ["admin"],
   settings: ["admin"],
   setup: ["admin"],
   billing: ["admin", "cashier"],
   platform: ["platform_admin"],
-  printOrder: ["admin", "cashier", "waiter", "kitchen"],
+  printOrder: ["admin", "cashier"],
   printCash: ["admin", "cashier"],
 };
 
@@ -90,5 +92,5 @@ export function canAccessRoute(name) {
 }
 
 export function homeForRole(role = authStore.role) {
-  return roleHome[role] || "main";
+  return roleHome[role] || "pos";
 }

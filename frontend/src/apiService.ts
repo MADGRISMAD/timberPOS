@@ -27,9 +27,9 @@ axios.interceptors.response.use(
       clearSession();
       if (
         typeof window !== 'undefined' &&
-        !window.location.pathname.match(/^\/($|register|invite|forgot|reset)/)
+        !window.location.pathname.match(/^\/($|login|register|invite|forgot|reset)/)
       ) {
-        window.location.href = '/';
+        window.location.href = '/login';
       }
     }
     if (
@@ -70,12 +70,20 @@ export const apiService = {
   getFoodById(foodId: string) {
     return axios.get(`/foods/${foodId}`).then((r) => r.data);
   },
+  lookupFood(code: string) {
+    return axios
+      .get('/foods/lookup', { params: { code } })
+      .then((r) => r.data);
+  },
   createFood(foodDTO: {
     name: string;
     price: number;
     description?: string;
     imgUrl?: string;
     menuId: string;
+    sku?: string;
+    barcode?: string;
+    priceIncludesTax?: boolean;
   }) {
     return axios.post('/foods', foodDTO).then((r) => r.data);
   },
@@ -114,8 +122,10 @@ export const apiService = {
   updateOrderStatus(orderId: string, status: string) {
     return axios.put(`/orders/${orderId}/status`, { status }).then((r) => r.data);
   },
-  payOrder(orderId: string, paymentMethod: string) {
-    return axios.put(`/orders/${orderId}/pay`, { paymentMethod }).then((r) => r.data);
+  payOrder(orderId: string, paymentMethod: string, opts: { cardExtraIva?: boolean } = {}) {
+    return axios
+      .put(`/orders/${orderId}/pay`, { paymentMethod, cardExtraIva: Boolean(opts.cardExtraIva) })
+      .then((r) => r.data);
   },
   editOrderAsCompleted(orderId: string) {
     return this.updateOrderStatus(orderId, 'served');
@@ -208,12 +218,12 @@ export const apiService = {
   getBillingStatus() {
     return axios.get('/billing/status').then((r) => r.data);
   },
-  billingCheckout(plan: string, email?: string) {
-    return axios.post('/billing/checkout', { plan, email }).then((r) => r.data);
+  billingCheckout(plan: string, email?: string, interval: 'month' | 'year' = 'month') {
+    return axios.post('/billing/checkout', { plan, email, interval }).then((r) => r.data);
   },
-  billingDevActivate(plan: string, preapprovalId?: string) {
+  billingDevActivate(plan: string, preapprovalId?: string, interval: 'month' | 'year' = 'month') {
     return axios
-      .post('/billing/dev/activate', { plan, preapprovalId })
+      .post('/billing/dev/activate', { plan, preapprovalId, interval })
       .then((r) => r.data);
   },
 

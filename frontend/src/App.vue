@@ -9,5 +9,14 @@ export default {
 </script>
 
 <style>
-/* Estilos para tu aplicación */
+html, body, #app {
+  height: 100%;
+  height: 100dvh;
+  margin: 0;
+}
+#app {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
 </style>

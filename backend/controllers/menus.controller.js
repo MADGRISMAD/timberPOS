@@ -82,33 +82,47 @@ async function getFood(req, res) {
 
 async function createFood(req, res) {
   try {
-    const { name, price, description, imgUrl, menuId } = req.body || {};
+    const { name, price, description, imgUrl, menuId, sku, barcode, priceIncludesTax } = req.body || {};
     if (!name || price == null || !menuId) {
       return res.status(400).send('name, price y menuId son requeridos');
     }
+    const code = String(barcode || sku || '').trim();
     const created = await db.CreateFood({
       name,
       price: Number(price),
+      priceIncludesTax: Boolean(priceIncludesTax),
       description: description || '',
       imgUrl: imgUrl || '',
+      sku: code,
+      barcode: code,
       menuId: String(menuId),
       tenantId: req.tenantId,
     });
     return res.status(201).json(created);
   } catch (err) {
     console.error(err);
-    return res.status(500).send(err.message || 'Error al crear platillo');
+    return res.status(500).send(err.message || 'Error al crear producto');
   }
 }
 
 async function updateFood(req, res) {
   try {
-    const updated = await db.UpdateFood(req.params.id, req.body || {}, req.tenantId);
-    if (!updated) return res.status(404).send('Platillo no encontrado');
+    const body = { ...(req.body || {}) };
+    if (body.barcode != null || body.sku != null) {
+      const code = String(body.barcode || body.sku || '').trim();
+      body.sku = code;
+      body.barcode = code;
+    }
+    if (body.priceIncludesTax != null) {
+      body.priceIncludesTax = Boolean(body.priceIncludesTax);
+    }
+    if (body.price != null) body.price = Number(body.price);
+    const updated = await db.UpdateFood(req.params.id, body, req.tenantId);
+    if (!updated) return res.status(404).send('Producto no encontrado');
     return res.status(200).json(updated);
   } catch (err) {
     console.error(err);
-    return res.status(500).send(err.message || 'Error al actualizar platillo');
+    return res.status(500).send(err.message || 'Error al actualizar producto');
   }
 }
 
@@ -125,6 +139,28 @@ async function deleteFood(req, res) {
   }
 }
 
+async function lookupFood(req, res) {
+  try {
+    const code = String(req.query.code || req.query.q || '').trim();
+    if (!code) return res.status(400).send('code es requerido');
+    const byCode = await db.GetFoodByBarcode(code, req.tenantId);
+    if (byCode) return res.status(200).json(byCode);
+
+    const all = await db.GetFoods(req.tenantId);
+    const q = code.toLowerCase();
+    const matches = (all || []).filter((f) => {
+      const name = String(f.name || '').toLowerCase();
+      const sku = String(f.sku || f.barcode || '').toLowerCase();
+      return sku === q || name.includes(q);
+    });
+    if (matches.length === 1) return res.status(200).json(matches[0]);
+    return res.status(200).json({ matches: matches.slice(0, 12) });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).send(err.message || 'Error al buscar producto');
+  }
+}
+
 module.exports = {
   listMenus,
   getMenu,
@@ -133,6 +169,7 @@ module.exports = {
   deleteMenu,
   listFoods,
   getFood,
+  lookupFood,
   createFood,
   updateFood,
   deleteFood,

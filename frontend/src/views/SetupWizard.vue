@@ -20,13 +20,13 @@
       <section v-if="step === 1" class="step-body">
         <h2>Bienvenido a Timber</h2>
         <p>
-          Plataforma de gestión para restaurantes, cafés y hotelería.
-          En unos minutos personalizas la marca de tu cliente y dejas el sistema listo para operar.
+          POS para tiendas de abarrotes y comercios de barrio.
+          En unos minutos personalizas tu tienda y empiezas a vender en mostrador.
         </p>
         <ul class="feature-list">
-          <li>Identidad visual del negocio</li>
-          <li>Datos operativos editables</li>
-          <li>Listo para múltiples clientes</li>
+          <li>Catálogo de productos por categoría</li>
+          <li>Venta rápida y caja del día</li>
+          <li>Listo para múltiples tiendas (SaaS)</li>
         </ul>
       </section>
 
@@ -43,11 +43,10 @@
         <label class="field">
           <span>Tipo de establecimiento</span>
           <select v-model="form.businessType">
-            <option value="restaurant">Restaurante</option>
-            <option value="cafe">Café</option>
-            <option value="bar">Bar</option>
-            <option value="hotel">Hotel / Hostelería</option>
-            <option value="other">Otro</option>
+            <option value="abarrotes">Abarrotes / tienda</option>
+            <option value="convenience">Conveniencia</option>
+            <option value="pharmacy">Farmacia / botica</option>
+            <option value="other">Otro comercio</option>
           </select>
         </label>
 
@@ -89,7 +88,7 @@
       <!-- Paso 4: Operación -->
       <section v-else class="step-body">
         <h2>Preferencias operativas</h2>
-        <p>Ajusta el punto de partida. Las mesas se pueden gestionar después desde el panel.</p>
+        <p>Define zona horaria. El catálogo y la caja se configuran después en el panel.</p>
 
         <label class="field">
           <span>Zona horaria</span>
@@ -106,18 +105,12 @@
           </select>
         </label>
 
-        <label class="field">
-          <span>Mesas iniciales (referencia)</span>
-          <input v-model.number="form.initialTables" type="number" min="0" max="100" />
-        </label>
-
         <div class="summary-card">
           <h3>Resumen</h3>
           <dl>
-            <div><dt>Negocio</dt><dd>{{ form.businessName || "—" }}</dd></div>
+            <div><dt>Tienda</dt><dd>{{ form.businessName || "—" }}</dd></div>
             <div><dt>Tipo</dt><dd>{{ typeLabel }}</dd></div>
             <div><dt>Dirección</dt><dd>{{ form.address || "Sin definir" }}</dd></div>
-            <div><dt>Mesas</dt><dd>{{ form.initialTables }}</dd></div>
           </dl>
         </div>
 
@@ -171,22 +164,25 @@ const stepTitles = [
 
 const form = reactive({
   businessName: venueStore.businessName || "",
-  businessType: venueStore.businessType || "restaurant",
+  businessType: venueStore.businessType || "abarrotes",
   address: venueStore.address || "",
   phone: venueStore.phone || "",
   logoUrl: venueStore.logoUrl || "/logo.svg",
-  primaryColor: venueStore.primaryColor || "#1F4D3A",
-  accentColor: venueStore.accentColor || "#C4A574",
+  primaryColor: venueStore.primaryColor || "#1e5aa8",
+  accentColor: venueStore.accentColor || "#E08A1E",
   timezone: venueStore.timezone || "America/Mexico_City",
-  initialTables: venueStore.initialTables || 8,
+  initialTables: 0,
 });
 
 const typeLabels = {
+  abarrotes: "Abarrotes / tienda",
+  convenience: "Conveniencia",
+  pharmacy: "Farmacia / botica",
+  other: "Otro comercio",
   restaurant: "Restaurante",
   cafe: "Café",
   bar: "Bar",
-  hotel: "Hotel / Hostelería",
-  other: "Otro",
+  hotel: "Hotel",
 };
 
 const typeLabel = computed(() => typeLabels[form.businessType] || "Negocio");
@@ -196,7 +192,7 @@ const previewLogo = computed(() => form.logoUrl || "/logo.svg");
 const canContinue = computed(() => {
   if (step.value === 2) return form.businessName.trim().length >= 2;
   if (step.value === 3) return true;
-  if (step.value === 4) return form.initialTables >= 0;
+  if (step.value === 4) return true;
   return true;
 });
 
@@ -231,7 +227,7 @@ async function finish() {
   error.value = "";
   try {
     await saveVenueSettings({ ...form });
-    router.push("/main");
+    router.push("/pos");
   } catch (e) {
     error.value = "No se pudo guardar la configuración. Intenta de nuevo.";
   } finally {
@@ -242,8 +238,8 @@ async function finish() {
 
 <style scoped>
 .setup-shell {
-  --primary: #1a4a38;
-  --accent: #9a7b52;
+  --primary: #1e5aa8;
+  --accent: #e08a1e;
   position: relative;
   min-height: 100vh;
   display: flex;
@@ -251,16 +247,16 @@ async function finish() {
   justify-content: center;
   padding: 2rem 1rem;
   font-family: var(--font-sans);
-  color: #1c1f1d;
+  color: #1a2332;
 }
 
 .setup-atmosphere {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 80% 60% at 10% 20%, rgba(196, 165, 116, 0.28), transparent 55%),
-    radial-gradient(ellipse 70% 50% at 90% 80%, rgba(31, 77, 58, 0.35), transparent 50%),
-    linear-gradient(160deg, #f3efe7 0%, #e4ebe4 45%, #d5ddd6 100%);
+    radial-gradient(ellipse 80% 60% at 10% 20%, rgba(224, 138, 30, 0.28), transparent 55%),
+    radial-gradient(ellipse 70% 50% at 90% 80%, rgba(30, 90, 168, 0.35), transparent 50%),
+    linear-gradient(160deg, #eef1f6 0%, #e4ebf4 45%, #d8e2ee 100%);
   animation: drift 14s ease-in-out infinite alternate;
 }
 
@@ -274,12 +270,12 @@ async function finish() {
   z-index: 1;
   width: 100%;
   max-width: 34rem;
-  background: rgba(255, 252, 248, 0.92);
+  background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(31, 77, 58, 0.12);
+  border: 1px solid rgba(30, 90, 168, 0.12);
   border-radius: 1.25rem;
   padding: 1.75rem 1.5rem 1.5rem;
-  box-shadow: 0 24px 60px rgba(28, 40, 32, 0.12);
+  box-shadow: 0 24px 60px rgba(18, 32, 56, 0.12);
   animation: rise 0.55s ease-out;
 }
 
@@ -305,7 +301,7 @@ async function finish() {
   font-size: 0.75rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--primary, #1f4d3a);
+  color: var(--primary, #1e5aa8);
   font-weight: 600;
   margin: 0;
 }
@@ -321,14 +317,14 @@ async function finish() {
 
 .progress-track {
   height: 0.35rem;
-  background: rgba(31, 77, 58, 0.12);
+  background: rgba(30, 90, 168, 0.12);
   border-radius: 999px;
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--primary, #1f4d3a), var(--accent, #c4a574));
+  background: linear-gradient(90deg, var(--primary, #1e5aa8), var(--accent, #e08a1e));
   transition: width 0.35s ease;
 }
 
@@ -363,8 +359,8 @@ async function finish() {
 
 .feature-list li {
   padding: 0.7rem 0.85rem;
-  background: rgba(31, 77, 58, 0.06);
-  border-left: 3px solid var(--accent, #c4a574);
+  background: rgba(30, 90, 168, 0.06);
+  border-left: 3px solid var(--accent, #e08a1e);
   border-radius: 0 0.5rem 0.5rem 0;
   font-size: 0.92rem;
 }
@@ -393,15 +389,15 @@ async function finish() {
   padding: 0.7rem 0.8rem;
   font: inherit;
   background: #fff;
-  color: #1c1f1d;
+  color: #1a2332;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .field input:focus,
 .field select:focus {
   outline: none;
-  border-color: var(--primary, #1f4d3a);
-  box-shadow: 0 0 0 3px rgba(31, 77, 58, 0.18);
+  border-color: var(--primary, #1e5aa8);
+  box-shadow: 0 0 0 3px rgba(30, 90, 168, 0.18);
 }
 
 .identity-preview {
@@ -411,7 +407,7 @@ async function finish() {
   padding: 0.9rem;
   margin-bottom: 1rem;
   border-radius: 0.75rem;
-  border: 2px solid var(--primary, #1a4a38);
+  border: 2px solid var(--primary, #1e5aa8);
   background: #fff;
 }
 
@@ -449,7 +445,7 @@ async function finish() {
   margin-top: 0.5rem;
   padding: 0.9rem 1rem;
   border-radius: 0.75rem;
-  background: rgba(31, 77, 58, 0.07);
+  background: rgba(30, 90, 168, 0.07);
 }
 
 .summary-card h3 {
@@ -457,7 +453,7 @@ async function finish() {
   font-size: 0.9rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--primary, #1f4d3a);
+  color: var(--primary, #1e5aa8);
 }
 
 .summary-card dl {
@@ -495,7 +491,7 @@ async function finish() {
   gap: 0.75rem;
   margin-top: 1.35rem;
   padding-top: 1rem;
-  border-top: 1px solid rgba(31, 77, 58, 0.1);
+  border-top: 1px solid rgba(30, 90, 168, 0.1);
 }
 
 .spacer {
@@ -514,7 +510,7 @@ async function finish() {
 }
 
 .btn-primary {
-  background: var(--primary, #1f4d3a);
+  background: var(--primary, #1e5aa8);
   color: #f7f4ef;
 }
 
@@ -533,7 +529,7 @@ async function finish() {
 }
 
 .btn-ghost:hover:not(:disabled) {
-  background: rgba(31, 77, 58, 0.08);
+  background: rgba(30, 90, 168, 0.08);
 }
 
 @media (max-width: 480px) {

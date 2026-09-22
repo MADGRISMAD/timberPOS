@@ -1,42 +1,40 @@
 <template>
   <AppShell>
     <div class="orders-page">
-      <div class="cash-banner" :class="{ open: cashOpen }">
-        <div v-if="!cashOpen">
-          <strong>Caja cerrada</strong>
-          <p>Ábrela para poder cobrar pedidos.</p>
-          <div class="cash-actions">
-            <label>Fondo inicial
-              <input v-model.number="openingFloat" type="number" min="0" step="1" />
-            </label>
-            <button type="button" class="btn-primary" :disabled="cashBusy" @click="openCash">
-              Abrir caja
-            </button>
+      <!-- Estado de caja: franja compacta -->
+      <div class="cash-strip" :class="cashOpen ? 'is-open' : 'is-closed'">
+        <div class="cash-status">
+          <span class="dot" aria-hidden="true" />
+          <div class="cash-copy">
+            <strong>{{ cashOpen ? 'Caja abierta' : 'Caja cerrada' }}</strong>
+            <p v-if="cashOpen && session">
+              Fondo {{ money(session.openingFloat) }}
+              · Ventas {{ money(cashTotals.total) }}
+              · Efectivo {{ money((session.openingFloat || 0) + cashTotals.cash) }}
+            </p>
+            <p v-else>Ábrela para cobrar ventas del turno.</p>
           </div>
         </div>
-        <div v-else>
-          <strong>Caja abierta</strong>
-          <p>
-            Fondo {{ money(session.openingFloat) }} ·
-            Ventas {{ money(cashTotals.total) }} ·
-            Efectivo esperado {{ money((session.openingFloat || 0) + cashTotals.cash) }}
-          </p>
-          <div class="cash-actions">
-            <label>Efectivo contado
-              <input v-model.number="countedCash" type="number" min="0" step="1" />
-            </label>
-            <button type="button" class="btn-danger" :disabled="cashBusy" @click="closeCash">
-              Cerrar caja
-            </button>
-          </div>
+        <div class="cash-btns">
+          <button
+            v-if="!cashOpen"
+            type="button"
+            class="btn-primary"
+            @click="showOpen = true"
+          >Abrir caja</button>
+          <button
+            v-else
+            type="button"
+            class="btn-ghost"
+            @click="prepClose"
+          >Cerrar turno</button>
         </div>
-        <p v-if="cashMsg" class="ok">{{ cashMsg }}</p>
-        <p v-if="cashErr" class="err">{{ cashErr }}</p>
       </div>
+      <p v-if="cashMsg" class="ok">{{ cashMsg }}</p>
+      <p v-if="cashErr" class="err">{{ cashErr }}</p>
 
-      <div class="toolbar">
-        <p>Cobro y seguimiento de pedidos del salón.</p>
-        <router-link to="/menu" class="btn-primary">Nuevo pedido</router-link>
+      <div class="toolbar hide-mobile">
+        <p>Ventas y cobros de la tienda.</p>
       </div>
 
       <div class="filters">
@@ -53,27 +51,33 @@
         <article v-for="o in filtered" :key="o.id" class="card">
           <div class="head">
             <div>
-              <h3>{{ o.tableName || 'Sin mesa' }}</h3>
-              <p class="meta">{{ formatDate(o.createdAt) }} · {{ modalityText(o.modality) }}</p>
+              <h3>#{{ String(o.id || '').slice(-6).toUpperCase() }}</h3>
+              <p class="meta">
+                {{ formatDate(o.createdAt) }}
+                <span class="hide-mobile"> · {{ (o.items || []).length }} líneas</span>
+              </p>
             </div>
             <div class="tags">
-              <span class="badge" :class="`st-${o.status}`">{{ statusText(o.status) }}</span>
               <span class="badge" :class="o.paymentStatus">{{ paymentText(o.paymentStatus) }}</span>
+              <span class="badge hide-mobile" :class="`st-${o.status}`">{{ statusText(o.status) }}</span>
             </div>
           </div>
-          <ul class="items">
-            <li v-for="(item, i) in o.items || []" :key="i">
+          <ul class="items hide-mobile">
+            <li v-for="(item, i) in (o.items || []).slice(0, 4)" :key="i">
               {{ item.quantity }}× {{ item.name }} — {{ money(item.price * item.quantity) }}
+            </li>
+            <li v-if="(o.items || []).length > 4" class="more-items">
+              +{{ (o.items || []).length - 4 }} más
             </li>
           </ul>
           <div class="foot">
             <strong>{{ money(o.total) }}</strong>
             <div class="actions">
               <router-link
-                class="link-btn"
+                class="link-btn hide-mobile"
                 :to="`/print/order/${o.id}?mode=receipt`"
                 target="_blank"
-              >Imprimir</router-link>
+              >Ticket</router-link>
               <button
                 v-if="o.paymentStatus !== 'paid'"
                 type="button"
@@ -82,17 +86,89 @@
                 :title="cashOpen ? '' : 'Abre la caja primero'"
                 @click="openPay(o)"
               >Cobrar</button>
-              <button v-if="o.status === 'pending'" type="button" @click="setStatus(o, 'preparing')">A cocina</button>
             </div>
           </div>
         </article>
         <p v-if="!filtered.length" class="empty">No hay pedidos en este filtro.</p>
       </div>
 
+      <!-- Abrir caja -->
+      <Teleport to="body">
+        <div v-if="showOpen" class="modal-bg" @click.self="showOpen = false">
+          <form class="modal" role="dialog" aria-modal="true" @submit.prevent="openCash">
+            <h3>Abrir caja</h3>
+            <p class="modal-hint">Indica el efectivo con el que inicia el turno.</p>
+            <label>
+              Fondo inicial
+              <input
+                v-model.number="openingFloat"
+                type="number"
+                min="0"
+                step="1"
+                inputmode="decimal"
+                autofocus
+              />
+            </label>
+            <div class="modal-actions">
+              <button type="button" @click="showOpen = false">Cancelar</button>
+              <button type="submit" class="btn-primary" :disabled="cashBusy">
+                {{ cashBusy ? 'Abriendo…' : 'Abrir' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </Teleport>
+
+      <!-- Cerrar caja -->
+      <Teleport to="body">
+        <div v-if="showClose" class="modal-bg" @click.self="showClose = false">
+          <form class="modal" role="dialog" aria-modal="true" @submit.prevent="closeCash">
+            <h3>Cerrar turno</h3>
+            <div class="close-summary">
+              <div><span>Fondo</span><strong>{{ money(session?.openingFloat) }}</strong></div>
+              <div><span>Ventas</span><strong>{{ money(cashTotals.total) }}</strong></div>
+              <div><span>Efectivo esperado</span><strong>{{ money(expectedCash) }}</strong></div>
+            </div>
+            <label>
+              Efectivo contado en caja
+              <input
+                v-model.number="countedCash"
+                type="number"
+                min="0"
+                step="1"
+                inputmode="decimal"
+                required
+              />
+            </label>
+            <p class="diff" :class="{ ok: difference === 0, bad: difference !== 0 }">
+              Diferencia: {{ money(difference) }}
+            </p>
+            <div class="modal-actions">
+              <button type="button" @click="showClose = false">Cancelar</button>
+              <button type="submit" class="btn-danger" :disabled="cashBusy">
+                {{ cashBusy ? 'Cerrando…' : 'Cerrar e imprimir' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </Teleport>
+
+      <!-- Cobrar -->
       <Teleport to="body">
         <div v-if="payOrder" class="modal-bg" @click.self="payOrder = null">
           <div class="modal" role="dialog" aria-modal="true" aria-labelledby="pay-title">
-            <h3 id="pay-title">Cobrar {{ money(payOrder.total) }}</h3>
+            <h3 id="pay-title">Cobrar</h3>
+            <div class="pay-sum">
+              <div><span>Ticket</span><strong>{{ money(payOrder.total) }}</strong></div>
+              <div v-if="payMethod === 'card' && cardExtraIva">
+                <span>IVA extra tarjeta ({{ Math.round(TAX_RATE * 100) }}%)</span>
+                <strong>{{ money(cardExtraAmount) }}</strong>
+              </div>
+              <div class="pay-total">
+                <span>A cobrar</span>
+                <strong>{{ money(payTotal) }}</strong>
+              </div>
+            </div>
             <label>Método de pago
               <select v-model="payMethod">
                 <option value="cash">Efectivo</option>
@@ -100,6 +176,10 @@
                 <option value="transfer">Transferencia</option>
                 <option value="other">Otro</option>
               </select>
+            </label>
+            <label v-if="payMethod === 'card'" class="check">
+              <input v-model="cardExtraIva" type="checkbox" />
+              Agregar IVA extra en tarjeta ({{ Math.round(TAX_RATE * 100) }}%)
             </label>
             <div class="modal-actions">
               <button type="button" @click="payOrder = null">Cancelar</button>
@@ -123,12 +203,22 @@ import {
   orderStatusLabel,
   paymentStatusLabel,
 } from "../labels";
+import { TAX_RATE } from "../tax";
 
 const router = useRouter();
 const orders = ref([]);
 const filter = ref("open");
 const payOrder = ref(null);
 const payMethod = ref("cash");
+const cardExtraIva = ref(true);
+
+const cardExtraAmount = computed(() => {
+  if (!payOrder.value || payMethod.value !== "card" || !cardExtraIva.value) return 0;
+  return Number((Number(payOrder.value.total || 0) * TAX_RATE).toFixed(2));
+});
+const payTotal = computed(() =>
+  Number((Number(payOrder.value?.total || 0) + cardExtraAmount.value).toFixed(2))
+);
 
 const cashOpen = ref(false);
 const session = ref(null);
@@ -138,6 +228,8 @@ const countedCash = ref(0);
 const cashBusy = ref(false);
 const cashMsg = ref("");
 const cashErr = ref("");
+const showOpen = ref(false);
+const showClose = ref(false);
 
 const filters = [
   { id: "open", label: "Abiertos" },
@@ -152,6 +244,11 @@ const filtered = computed(() => {
   if (filter.value === "unpaid") return orders.value.filter((o) => o.paymentStatus !== "paid");
   return orders.value.filter((o) => o.paymentStatus !== "paid" && o.status !== "cancelled");
 });
+
+const expectedCash = computed(
+  () => Number(session.value?.openingFloat || 0) + Number(cashTotals.value.cash || 0)
+);
+const difference = computed(() => Number(countedCash.value || 0) - expectedCash.value);
 
 function money(n) {
   return Number(n || 0).toLocaleString("es-MX", { style: "currency", currency: "MXN" });
@@ -187,12 +284,19 @@ async function loadCash() {
   }
 }
 
+function prepClose() {
+  countedCash.value = expectedCash.value;
+  cashErr.value = "";
+  showClose.value = true;
+}
+
 async function openCash() {
   cashBusy.value = true;
   cashErr.value = "";
   cashMsg.value = "";
   try {
     await apiService.openCashSession(Number(openingFloat.value || 0));
+    showOpen.value = false;
     cashMsg.value = "Caja abierta.";
     await loadCash();
   } catch (e) {
@@ -203,13 +307,13 @@ async function openCash() {
 }
 
 async function closeCash() {
-  if (!confirm("¿Cerrar la caja con el efectivo contado?")) return;
   cashBusy.value = true;
   cashErr.value = "";
   cashMsg.value = "";
   try {
     const res = await apiService.closeCashSession(Number(countedCash.value || 0));
-    cashMsg.value = `Caja cerrada. Diferencia: ${money(res.session?.difference)}`;
+    showClose.value = false;
+    cashMsg.value = `Turno cerrado. Diferencia: ${money(res.session?.difference)}`;
     if (res.session?.id) {
       router.push(`/print/cash/${res.session.id}?autoprint=1`);
     }
@@ -233,16 +337,20 @@ async function load() {
 function openPay(o) {
   if (!cashOpen.value) {
     cashErr.value = "Abre la caja antes de cobrar.";
+    showOpen.value = true;
     return;
   }
   payOrder.value = o;
   payMethod.value = "cash";
+  cardExtraIva.value = true;
 }
 
 async function confirmPay() {
   if (!payOrder.value) return;
   try {
-    const updated = await apiService.payOrder(payOrder.value.id, payMethod.value);
+    const updated = await apiService.payOrder(payOrder.value.id, payMethod.value, {
+      cardExtraIva: payMethod.value === "card" && cardExtraIva.value,
+    });
     const idx = orders.value.findIndex((x) => x.id === updated.id);
     if (idx >= 0) orders.value[idx] = updated;
     const id = payOrder.value.id;
@@ -266,37 +374,97 @@ onMounted(load);
 </script>
 
 <style scoped>
-.orders-page { animation: t-fade-up .45s ease both; }
-.cash-banner {
-  margin-bottom: 1rem;
-  padding: 1rem 1.1rem;
-  border-radius: 1rem;
-  border: 1px solid var(--timber-line);
-  background: var(--timber-warning-soft);
-  color: var(--timber-ink);
+.orders-page {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: t-fade-up .45s ease both;
 }
-.cash-banner.open { background: var(--timber-success-soft); }
-.cash-banner p { margin: .25rem 0 .55rem; font-size: .9rem; color: var(--timber-muted); }
-.cash-actions { display: flex; flex-wrap: wrap; gap: .55rem; align-items: end; }
-.cash-actions label { display: grid; gap: .25rem; font-size: .8rem; font-weight: 700; }
-.cash-actions input {
-  min-height: 2.75rem;
+
+.cash-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.7rem;
   border: 1px solid var(--timber-line);
-  border-radius: .65rem;
-  padding: .5rem .7rem;
+  background: var(--timber-panel);
+  margin-bottom: 0.45rem;
+  flex-shrink: 0;
+}
+.cash-strip.is-closed {
+  border-color: color-mix(in srgb, var(--timber-warning) 35%, var(--timber-line));
+}
+.cash-strip.is-open {
+  border-color: color-mix(in srgb, var(--timber-success) 35%, var(--timber-line));
+}
+.cash-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  min-width: 0;
+}
+.dot {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  margin-top: 0.4rem;
+  flex-shrink: 0;
+  background: var(--timber-warning);
+}
+.cash-strip.is-open .dot {
+  background: var(--timber-success);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--timber-success) 25%, transparent);
+}
+.cash-copy { min-width: 0; }
+.cash-copy strong {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.cash-copy p {
+  margin: 0.2rem 0 0;
+  font-size: 0.82rem;
+  color: var(--timber-muted);
+  line-height: 1.35;
+}
+.cash-btns { display: flex; gap: 0.5rem; flex-shrink: 0; }
+
+.btn-ghost {
+  min-height: 2.85rem;
+  padding: 0.55rem 1rem;
+  border: 1px solid var(--timber-line);
+  border-radius: 0.75rem;
   background: var(--timber-panel-elevated);
   color: var(--timber-ink);
+  font-weight: 700;
+  cursor: pointer;
 }
-.toolbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:1.2rem; gap:1rem; flex-wrap:wrap; }
-.toolbar p { margin:0; color:var(--timber-muted); }
-.btn-primary { background:var(--timber-primary); color:var(--timber-on-primary); border:none; border-radius:.8rem; padding:.75rem 1.1rem; font-weight:700; text-decoration:none; cursor:pointer; display:inline-block; min-height:3rem; box-shadow:var(--timber-shadow); }
+
+.toolbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:0.55rem; gap:0.75rem; flex-wrap:wrap; flex-shrink:0; }
+.toolbar p { margin:0; color:var(--timber-muted); font-size:0.88rem; }
+.btn-primary { background:var(--timber-primary); color:var(--timber-on-primary); border:none; border-radius:.7rem; padding:.55rem 0.95rem; font-weight:700; text-decoration:none; cursor:pointer; display:inline-block; min-height:2.6rem; box-shadow:var(--timber-shadow); }
 .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
-.btn-danger { background:var(--timber-danger); color:#fff; border:none; border-radius:.8rem; padding:.75rem 1.1rem; font-weight:700; cursor:pointer; min-height:3rem; }
-.filters { display:flex; gap:.45rem; flex-wrap:wrap; margin-bottom:1rem; }
-.filters button { border:1px solid var(--timber-line); background:var(--timber-panel-elevated); color:var(--timber-ink); border-radius:999px; padding:.55rem 1rem; cursor:pointer; font-size:.9rem; font-weight:700; min-height:2.85rem; }
+.btn-danger { background:var(--timber-danger); color:#fff; border:none; border-radius:.7rem; padding:.55rem 0.95rem; font-weight:700; cursor:pointer; min-height:2.6rem; }
+.filters { display:flex; gap:.35rem; flex-wrap:wrap; margin-bottom:0.55rem; flex-shrink:0; }
+.filters button { border:1px solid var(--timber-line); background:var(--timber-panel-elevated); color:var(--timber-ink); border-radius:999px; padding:.4rem 0.85rem; cursor:pointer; font-size:.82rem; font-weight:700; min-height:2.4rem; }
 .filters button.active { background:var(--timber-primary); color:var(--timber-on-primary); border-color:transparent; }
-.list { display:grid; gap:.85rem; }
-.card { background:var(--timber-panel); border:1px solid var(--timber-line); border-radius:1.1rem; padding:1.15rem; box-shadow:var(--timber-shadow); color:var(--timber-ink); }
+.list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  gap: 0.55rem;
+  align-content: start;
+  padding-bottom: 0.25rem;
+}
+.card { background:var(--timber-panel); border:1px solid var(--timber-line); border-radius:0.85rem; padding:0.85rem; box-shadow:var(--timber-shadow); color:var(--timber-ink); }
 .head { display:flex; justify-content:space-between; gap:1rem; align-items:flex-start; }
 .head h3 { margin:0; font-family:var(--font-display); font-size:1.2rem; font-weight:700; letter-spacing:-0.01em; }
 .meta { margin:.25rem 0 0; color:var(--timber-muted); font-size:.82rem; }
@@ -320,8 +488,9 @@ onMounted(load);
 .actions button:not(.btn-primary) { border:1px solid var(--timber-line); background:var(--timber-panel-elevated); color:var(--timber-ink); border-radius:.7rem; padding:.65rem .85rem; cursor:pointer; font-weight:700; min-height:2.85rem; }
 .link-btn { display:inline-flex; align-items:center; border:1px solid var(--timber-line); background:var(--timber-panel-elevated); color:var(--timber-ink); border-radius:.7rem; padding:.65rem .85rem; font-weight:700; text-decoration:none; min-height:2.85rem; }
 .empty { color:var(--timber-muted); }
-.ok { color: var(--timber-success); font-size: .88rem; margin: .5rem 0 0; }
-.err { color: var(--timber-danger); font-size: .88rem; margin: .5rem 0 0; }
+.ok { color: var(--timber-success); font-size: .88rem; margin: 0 0 .75rem; font-weight: 600; }
+.err { color: var(--timber-danger); font-size: .88rem; margin: 0 0 .75rem; font-weight: 600; }
+
 .modal-bg {
   position: fixed;
   inset: 0;
@@ -341,7 +510,7 @@ onMounted(load);
   border-radius: 1.15rem 1.15rem 0.85rem 0.85rem;
   padding: 1.35rem 1.25rem calc(1.25rem + env(safe-area-inset-bottom, 0px));
   width: min(24rem, 100%);
-  max-height: min(85vh, 32rem);
+  max-height: min(85vh, 36rem);
   overflow: auto;
   display: grid;
   gap: 0.85rem;
@@ -355,7 +524,53 @@ onMounted(load);
   letter-spacing: -0.01em;
   font-size: 1.35rem;
 }
+.modal-hint {
+  margin: -0.35rem 0 0;
+  color: var(--timber-muted);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
 .modal label { display: grid; gap: 0.35rem; font-size: 0.9rem; font-weight: 600; }
+.modal .check {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.modal .check input {
+  width: 1.15rem;
+  height: 1.15rem;
+  min-height: 0;
+  accent-color: var(--timber-primary);
+}
+.pay-sum {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 0.85rem;
+  background: var(--timber-surface);
+  border: 1px solid var(--timber-line);
+}
+.pay-sum > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+.pay-sum span { color: var(--timber-muted); }
+.pay-total {
+  margin-top: 0.2rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--timber-line);
+  font-size: 1.05rem !important;
+}
+.pay-total strong {
+  font-size: 1.35rem;
+  color: var(--timber-primary);
+}
+.modal input,
 .modal select {
   min-height: 3rem;
   padding: 0.65rem 0.8rem;
@@ -364,7 +579,38 @@ onMounted(load);
   background: var(--timber-panel-elevated);
   color: var(--timber-ink);
   font: inherit;
+  font-size: 1.15rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
+.modal select { font-size: 1rem; font-weight: 600; }
+
+.close-summary {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 0.85rem;
+  background: var(--timber-surface);
+  border: 1px solid var(--timber-line);
+}
+.close-summary > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+.close-summary span { color: var(--timber-muted); }
+.close-summary strong { font-variant-numeric: tabular-nums; }
+
+.diff {
+  margin: 0;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.95rem;
+}
+.diff.ok { color: var(--timber-success); }
+.diff.bad { color: var(--timber-warning); }
+
 .modal-actions {
   display: grid;
   grid-template-columns: 1fr 1.2fr;
@@ -386,8 +632,28 @@ onMounted(load);
   background: var(--timber-primary);
   color: var(--timber-on-primary);
 }
+.modal-actions .btn-danger {
+  border: none;
+}
 
-@media (min-width: 720px) {
+.more-items { list-style: none; margin-left: -1.1rem; color: var(--timber-muted); font-style: italic; }
+
+@media (max-width: 767.98px) {
+  .orders-page { padding: 0.55rem; }
+  .cash-strip { padding: 0.5rem 0.65rem; }
+  .cash-copy p { display: none; }
+  .card { padding: 0.75rem; }
+  .foot { gap: 0.5rem; }
+  .filters button { min-height: 2.35rem; padding: 0.35rem 0.7rem; font-size: 0.78rem; }
+}
+
+@media (min-width: 768px) and (max-width: 1099.98px) {
+  .orders-page { padding: 0.75rem; }
+  .list { gap: 0.65rem; }
+}
+
+@media (min-width: 1100px) {
+  .orders-page { padding: 0.85rem 1rem; }
   .modal-bg {
     align-items: center;
     padding: 1.5rem;
@@ -397,4 +663,16 @@ onMounted(load);
     padding: 1.4rem;
   }
 }
+
+@media (min-width: 720px) and (max-width: 1099.98px) {
+  .modal-bg {
+    align-items: center;
+    padding: 1.5rem;
+  }
+  .modal {
+    border-radius: 1.15rem;
+    padding: 1.4rem;
+  }
+}
+
 </style>

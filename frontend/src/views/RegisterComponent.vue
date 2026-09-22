@@ -74,7 +74,8 @@
         <p v-if="onError" class="error-text">{{ Error }}</p>
       </form>
 
-      <router-link to="/" class="auth-link">¿Ya tienes cuenta? Iniciar sesión</router-link>
+      <router-link to="/login" class="auth-link">¿Ya tienes cuenta? Iniciar sesión</router-link>
+      <router-link to="/" class="auth-link">← Volver al inicio</router-link>
     </div>
   </div>
 </template>
@@ -188,9 +189,9 @@ export default {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 70% 50% at 15% 15%, rgba(196, 165, 116, 0.35), transparent 55%),
-    radial-gradient(ellipse 60% 45% at 85% 75%, rgba(31, 77, 58, 0.4), transparent 50%),
-    linear-gradient(155deg, #1a2e26 0%, #243d33 40%, #3d4f42 100%);
+    radial-gradient(ellipse 70% 50% at 15% 15%, rgba(224, 138, 30, 0.22), transparent 55%),
+    radial-gradient(ellipse 60% 45% at 85% 75%, rgba(30, 90, 168, 0.4), transparent 50%),
+    linear-gradient(155deg, #0a1a30 0%, #123056 40%, #1e5aa8 100%);
 }
 
 .auth-panel {
@@ -198,7 +199,7 @@ export default {
   z-index: 1;
   width: 100%;
   max-width: 28rem;
-  background: rgba(255, 252, 248, 0.96);
+  background: rgba(255, 255, 255, 0.97);
   border-radius: 1.15rem;
   padding: 1.75rem 1.5rem 1.4rem;
   box-shadow: 0 28px 60px rgba(0, 0, 0, 0.28);
@@ -223,7 +224,7 @@ export default {
   font-weight: 800;
   letter-spacing: -0.02em;
   margin: 0;
-  color: #1f4d3a;
+  color: #1e5aa8;
 }
 
 .brand-tagline {
@@ -266,15 +267,15 @@ export default {
 
 .field input:focus {
   outline: none;
-  border-color: #1f4d3a;
-  box-shadow: 0 0 0 3px rgba(31, 77, 58, 0.18);
+  border-color: #1e5aa8;
+  box-shadow: 0 0 0 3px rgba(30, 90, 168, 0.18);
 }
 
 .btn-primary {
   border: none;
   border-radius: 0.55rem;
   padding: 0.75rem;
-  background: #1f4d3a;
+  background: #1e5aa8;
   color: #f7f4ef;
   font: inherit;
   font-weight: 600;
@@ -299,7 +300,7 @@ export default {
 .success-link {
   display: block;
   text-align: center;
-  color: #1f4d3a;
+  color: #1e5aa8;
   font-weight: 600;
   font-size: 0.9rem;
 }
@@ -314,7 +315,7 @@ export default {
 }
 
 .auth-link:hover {
-  color: #1f4d3a;
+  color: #1e5aa8;
 }
 
 @media (max-width: 480px) {

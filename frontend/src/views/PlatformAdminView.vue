@@ -32,6 +32,7 @@
             <td>
               <select :value="t.plan" @change="changePlan(t, $event.target.value)">
                 <option value="basic">Básico</option>
+                <option value="growth">Crecimiento</option>
                 <option value="pro">Pro</option>
               </select>
             </td>

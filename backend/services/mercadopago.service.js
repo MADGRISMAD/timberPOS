@@ -1,72 +1,74 @@
 /**
  * Mercado Pago Preapproval (suscripciones) — con fallback mock sin token.
  */
+const {
+  PLANS,
+  planPrice,
+  planLabel,
+  planAiQuota,
+  formatAiQuota,
+  listPlans: catalogList,
+} = require('./plans.catalog');
+
 const MP_API = 'https://api.mercadopago.com';
 
 function hasMpConfig() {
   return Boolean(process.env.MP_ACCESS_TOKEN);
 }
 
-function planPrice(plan) {
-  if (plan === 'pro') {
-    return Number(process.env.MP_PLAN_PRO_PRICE || 1499);
-  }
-  return Number(process.env.MP_PLAN_BASIC_PRICE || 799);
-}
-
-function planLabel(plan) {
-  return plan === 'pro' ? 'Timber Pro' : 'Timber Básico';
-}
-
 function listPlans() {
-  const currency = process.env.MP_CURRENCY || 'MXN';
-  return [
-    {
-      id: 'basic',
-      name: 'Básico',
-      price: planPrice('basic'),
-      currency,
-      description: '1 local, mesas, cocina, caja e impresión',
-    },
-    {
-      id: 'pro',
-      name: 'Pro',
-      price: planPrice('pro'),
-      currency,
-      description: 'Todo lo básico + prioridad de soporte y reportes próximos',
-    },
-  ];
+  return catalogList(process.env.MP_CURRENCY || 'MXN');
 }
 
-async function createPreapproval({ plan, tenantId, payerEmail, externalReference }) {
+async function createPreapproval({
+  plan,
+  tenantId,
+  payerEmail,
+  externalReference,
+  interval = 'month',
+}) {
   const appUrl = (process.env.APP_URL || 'http://localhost:5173').replace(/\/$/, '');
   const apiUrl = (process.env.API_PUBLIC_URL || `http://localhost:${process.env.PORT || 8081}`).replace(
     /\/$/,
     ''
   );
-  const amount = planPrice(plan);
+  const billingInterval = interval === 'year' ? 'year' : 'month';
+  const amount = planPrice(plan, billingInterval);
   const currency = process.env.MP_CURRENCY || 'MXN';
+  const ref = externalReference || `${tenantId}:${plan}:${billingInterval}`;
 
   if (!hasMpConfig()) {
     return {
       mock: true,
-      id: `mock_${tenantId}_${plan}_${Date.now()}`,
-      init_point: `${appUrl}/billing?mock=1&plan=${plan}`,
-      sandbox_init_point: `${appUrl}/billing?mock=1&plan=${plan}`,
+      id: `mock_${tenantId}_${plan}_${billingInterval}_${Date.now()}`,
+      init_point: `${appUrl}/billing?mock=1&plan=${plan}&interval=${billingInterval}`,
+      sandbox_init_point: `${appUrl}/billing?mock=1&plan=${plan}&interval=${billingInterval}`,
       status: 'pending',
+      amount,
+      interval: billingInterval,
     };
   }
 
+  const autoRecurring =
+    billingInterval === 'year'
+      ? {
+          frequency: 1,
+          frequency_type: 'years',
+          transaction_amount: amount,
+          currency_id: currency,
+        }
+      : {
+          frequency: 1,
+          frequency_type: 'months',
+          transaction_amount: amount,
+          currency_id: currency,
+        };
+
   const body = {
-    reason: planLabel(plan),
-    external_reference: externalReference || `${tenantId}:${plan}`,
+    reason: planLabel(plan, billingInterval),
+    external_reference: ref,
     payer_email: payerEmail,
-    auto_recurring: {
-      frequency: 1,
-      frequency_type: 'months',
-      transaction_amount: amount,
-      currency_id: currency,
-    },
+    auto_recurring: autoRecurring,
     back_url: `${appUrl}/billing?mp=return`,
     status: 'pending',
     notification_url: `${apiUrl}/billing/webhook`,
@@ -118,9 +120,12 @@ function mapMpStatusToBilling(mpStatus) {
 }
 
 module.exports = {
+  PLANS,
   hasMpConfig,
   planPrice,
   planLabel,
+  planAiQuota,
+  formatAiQuota,
   listPlans,
   createPreapproval,
   getPreapproval,

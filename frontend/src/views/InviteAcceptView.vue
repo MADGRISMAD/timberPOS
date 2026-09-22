@@ -15,7 +15,7 @@
           <label>Contraseña<input v-model="form.password" type="password" required minlength="6" /></label>
           <button type="submit" class="btn" :disabled="saving">{{ saving ? 'Creando…' : 'Aceptar e ingresar' }}</button>
         </form>
-        <p v-if="ok" class="ok">Cuenta creada. <router-link to="/">Inicia sesión</router-link></p>
+        <p v-if="ok" class="ok">Cuenta creada. <router-link to="/login">Inicia sesión</router-link></p>
       </template>
     </div>
   </div>
@@ -99,12 +99,12 @@ async function accept() {
   padding: 1.5rem;
 }
 .logo { width: 3rem; height: 3rem; border-radius: .7rem; }
-h1 { font-family: var(--font-display); font-size: 1.45rem; font-weight: 800; letter-spacing: -0.02em; margin: .75rem 0 .35rem; color: #1f4d3a; }
+h1 { font-family: var(--font-display); font-size: 1.45rem; font-weight: 800; letter-spacing: -0.02em; margin: .75rem 0 .35rem; color: #1e5aa8; }
 .meta { color: #66706a; font-size: .9rem; }
 form { display: grid; gap: .65rem; margin-top: 1rem; }
 label { display: grid; gap: .25rem; font-size: .85rem; font-weight: 500; }
 input { border: 1px solid #cdd5cf; border-radius: .45rem; padding: .6rem; font: inherit; }
-.btn { background: #1f4d3a; color: #fff; border: none; border-radius: .5rem; padding: .7rem; font-weight: 600; cursor: pointer; }
+.btn { background: #1e5aa8; color: #fff; border: none; border-radius: .5rem; padding: .7rem; font-weight: 600; cursor: pointer; }
 .err { color: #b42318; }
 .ok { color: #1b5e20; }
 </style>

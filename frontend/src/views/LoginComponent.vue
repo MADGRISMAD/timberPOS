@@ -6,7 +6,7 @@
       <div class="brand-block">
         <img src="/logo.svg" alt="Timber" class="brand-logo" />
         <h1 class="brand-name">Timber</h1>
-        <p class="brand-tagline">Gestión de salón para tu negocio</p>
+        <p class="brand-tagline">POS para tu tienda de abarrotes</p>
       </div>
 
       <h2 class="auth-heading">Ingresar</h2>
@@ -27,6 +27,7 @@
 
       <router-link to="/forgot" class="auth-link">¿Olvidaste tu contraseña?</router-link>
       <router-link to="/register" class="auth-link">¿No tienes cuenta? Regístrate</router-link>
+      <router-link to="/" class="auth-link">← Volver al inicio</router-link>
     </div>
   </div>
 </template>
@@ -87,16 +88,16 @@ export default {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 70% 50% at 12% 18%, rgba(184, 149, 108, 0.32), transparent 55%),
-    radial-gradient(ellipse 55% 40% at 88% 78%, rgba(26, 74, 56, 0.45), transparent 50%),
-    linear-gradient(155deg, #0f241c 0%, #1a3f32 42%, #2a4d40 100%);
+    radial-gradient(ellipse 70% 50% at 12% 18%, rgba(224, 138, 30, 0.22), transparent 55%),
+    radial-gradient(ellipse 55% 40% at 88% 78%, rgba(30, 90, 168, 0.4), transparent 50%),
+    linear-gradient(155deg, #0a1a30 0%, #123056 42%, #1e5aa8 100%);
 }
 .auth-panel {
   position: relative;
   z-index: 1;
   width: 100%;
   max-width: 26rem;
-  background: var(--timber-panel, #fffcf8);
+  background: var(--timber-panel, #ffffff);
   border-radius: 1.15rem;
   padding: 1.75rem 1.5rem 1.4rem;
   box-shadow: 0 28px 60px rgba(0, 0, 0, 0.28);
@@ -110,15 +111,15 @@ export default {
   font-family: var(--font-display);
   font-size: 2.1rem;
   margin: 0;
-  color: var(--timber-primary, #1a4a38);
+  color: var(--timber-primary, #1e5aa8);
   font-weight: 800;
 }
-.brand-tagline { margin: 0.4rem 0 0; color: var(--timber-muted, #66706a); font-size: 0.92rem; }
+.brand-tagline { margin: 0.4rem 0 0; color: var(--timber-muted, #64748b); font-size: 0.92rem; }
 .auth-heading { font-size: 1.05rem; font-weight: 600; margin: 0 0 1rem; }
 .auth-form { display: grid; gap: 0.9rem; }
 .field { display: grid; gap: 0.35rem; font-size: 0.85rem; font-weight: 500; }
 .field input {
-  border: 1px solid var(--timber-line, rgba(18,24,22,.12));
+  border: 1px solid var(--timber-line, rgba(26,35,50,.12));
   border-radius: 0.7rem;
   padding: 0.75rem 0.85rem;
   font: inherit;
@@ -129,8 +130,8 @@ export default {
   border: none;
   border-radius: 0.7rem;
   padding: 0.8rem;
-  background: var(--timber-primary, #1a4a38);
-  color: #f8f6f2;
+  background: var(--timber-primary, #1e5aa8);
+  color: #fff;
   font: inherit;
   font-weight: 600;
   cursor: pointer;
@@ -141,7 +142,7 @@ export default {
   display: block;
   text-align: center;
   margin-top: 0.75rem;
-  color: var(--timber-primary, #1a4a38);
+  color: var(--timber-primary, #1e5aa8);
   font-weight: 600;
   font-size: 0.9rem;
   text-decoration: none;
