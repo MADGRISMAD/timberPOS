@@ -26,31 +26,39 @@
         <p v-if="!waiters.length && !loading" class="empty">No hay personal registrado.</p>
       </div>
 
-      <div v-if="showForm" class="modal-bg" @click.self="showForm = false">
-        <form class="modal" @submit.prevent="create">
-          <h3>Nuevo mesero</h3>
-          <label>Nombre<input v-model="form.name" required /></label>
-          <label>Apellido<input v-model="form.lastName" required /></label>
-          <label>Celular (10 dígitos)<input v-model="form.cellphone" maxlength="10" pattern="\\d{10}" required /></label>
-          <label>Turno
-            <select v-model="form.workSchedule">
-              <option value="morning">Mañana</option>
-              <option value="afternoon">Tarde</option>
-              <option value="evening">Noche</option>
-            </select>
-          </label>
-          <label>Estado
-            <select v-model="form.status">
-              <option value="active">En turno</option>
-              <option value="rest">Descanso</option>
-            </select>
-          </label>
-          <div class="modal-actions">
-            <button type="button" @click="showForm = false">Cancelar</button>
-            <button type="submit" class="btn-primary" :disabled="saving">{{ saving ? 'Guardando…' : 'Guardar' }}</button>
-          </div>
-        </form>
-      </div>
+      <Teleport to="body">
+        <div v-if="showForm" class="modal-bg" @click.self="showForm = false">
+          <form class="modal" @submit.prevent="create" role="dialog" aria-modal="true" aria-labelledby="staff-form-title">
+            <h3 id="staff-form-title">Nuevo mesero</h3>
+            <div class="modal-body">
+              <label>Nombre<input v-model="form.name" required autocomplete="given-name" /></label>
+              <label>Apellido<input v-model="form.lastName" required autocomplete="family-name" /></label>
+              <label>Celular (10 dígitos)
+                <input v-model="form.cellphone" maxlength="10" pattern="\d{10}" inputmode="numeric" required />
+              </label>
+              <label>Turno
+                <select v-model="form.workSchedule">
+                  <option value="morning">Mañana</option>
+                  <option value="afternoon">Tarde</option>
+                  <option value="evening">Noche</option>
+                </select>
+              </label>
+              <label>Estado
+                <select v-model="form.status">
+                  <option value="active">En turno</option>
+                  <option value="rest">Descanso</option>
+                </select>
+              </label>
+            </div>
+            <div class="modal-actions">
+              <button type="button" @click="showForm = false">Cancelar</button>
+              <button type="submit" class="btn-primary" :disabled="saving">
+                {{ saving ? 'Guardando…' : 'Guardar' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </Teleport>
     </div>
   </AppShell>
 </template>
@@ -162,10 +170,98 @@ onMounted(load);
 .actions .danger { color:var(--timber-danger); border-color:color-mix(in srgb, var(--timber-danger) 35%, transparent); }
 .empty, .error { color:var(--timber-muted); }
 .error { color:var(--timber-danger); margin-bottom:.75rem; }
-.modal-bg { position:fixed; inset:0; background:rgba(10,16,14,.48); backdrop-filter:blur(6px); display:flex; align-items:center; justify-content:center; z-index:50; padding:1rem; }
-.modal { background:var(--timber-panel); color:var(--timber-ink); border-radius:1.15rem; padding:1.3rem; width:100%; max-width:24rem; display:grid; gap:.7rem; border:1px solid var(--timber-line); box-shadow:var(--timber-shadow); }
-.modal h3 { margin:0; font-family:var(--font-display); font-size:1.25rem; font-weight:700; letter-spacing:-0.01em; }
-.modal label { display:grid; gap:.3rem; font-size:.85rem; font-weight:500; }
-.modal input, .modal select { border:1px solid var(--timber-line); border-radius:.65rem; padding:.65rem .75rem; font:inherit; background:var(--timber-panel-elevated); color:var(--timber-ink); }
-.modal-actions { display:flex; justify-content:flex-end; gap:.5rem; margin-top:.35rem; }
+
+.modal-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(10, 16, 14, 0.55);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0.75rem;
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+}
+.modal {
+  background: var(--timber-panel);
+  color: var(--timber-ink);
+  border-radius: 1.15rem 1.15rem 0.85rem 0.85rem;
+  padding: 1.15rem 1.15rem 0.85rem;
+  width: min(26rem, 100%);
+  max-height: min(90dvh, 40rem);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  border: 1px solid var(--timber-line);
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.22);
+  overflow: hidden;
+}
+.modal h3 {
+  margin: 0;
+  flex-shrink: 0;
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.modal-body {
+  display: grid;
+  gap: 0.7rem;
+  overflow: auto;
+  min-height: 0;
+  padding-right: 0.15rem;
+  -webkit-overflow-scrolling: touch;
+}
+.modal label { display: grid; gap: 0.3rem; font-size: 0.88rem; font-weight: 600; }
+.modal input,
+.modal select {
+  min-height: 3rem;
+  border: 1px solid var(--timber-line);
+  border-radius: 0.7rem;
+  padding: 0.65rem 0.8rem;
+  font: inherit;
+  background: var(--timber-panel-elevated);
+  color: var(--timber-ink);
+}
+.modal-actions {
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 0.55rem;
+  padding-top: 0.25rem;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  border-top: 1px solid var(--timber-line);
+  margin-top: 0.15rem;
+}
+.modal-actions button {
+  min-height: 3.15rem;
+  border-radius: 0.85rem;
+  border: 1px solid var(--timber-line);
+  background: var(--timber-surface);
+  color: var(--timber-ink);
+  font-weight: 700;
+  font-size: 1rem;
+  cursor: pointer;
+}
+.modal-actions .btn-primary {
+  border: none;
+  background: var(--timber-primary);
+  color: var(--timber-on-primary);
+  box-shadow: var(--timber-shadow);
+}
+.modal-actions .btn-primary:disabled { opacity: 0.65; cursor: wait; }
+
+@media (min-width: 720px) {
+  .modal-bg {
+    align-items: center;
+    padding: 1.5rem;
+  }
+  .modal {
+    border-radius: 1.15rem;
+    padding: 1.35rem;
+    max-height: min(88vh, 36rem);
+  }
+}
 </style>

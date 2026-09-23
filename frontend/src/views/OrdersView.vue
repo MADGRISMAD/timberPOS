@@ -89,23 +89,25 @@
         <p v-if="!filtered.length" class="empty">No hay pedidos en este filtro.</p>
       </div>
 
-      <div v-if="payOrder" class="modal-bg" @click.self="payOrder = null">
-        <div class="modal">
-          <h3>Cobrar {{ money(payOrder.total) }}</h3>
-          <label>Método de pago
-            <select v-model="payMethod">
-              <option value="cash">Efectivo</option>
-              <option value="card">Tarjeta</option>
-              <option value="transfer">Transferencia</option>
-              <option value="other">Otro</option>
-            </select>
-          </label>
-          <div class="modal-actions">
-            <button type="button" @click="payOrder = null">Cancelar</button>
-            <button type="button" class="btn-primary" @click="confirmPay">Confirmar cobro</button>
+      <Teleport to="body">
+        <div v-if="payOrder" class="modal-bg" @click.self="payOrder = null">
+          <div class="modal" role="dialog" aria-modal="true" aria-labelledby="pay-title">
+            <h3 id="pay-title">Cobrar {{ money(payOrder.total) }}</h3>
+            <label>Método de pago
+              <select v-model="payMethod">
+                <option value="cash">Efectivo</option>
+                <option value="card">Tarjeta</option>
+                <option value="transfer">Transferencia</option>
+                <option value="other">Otro</option>
+              </select>
+            </label>
+            <div class="modal-actions">
+              <button type="button" @click="payOrder = null">Cancelar</button>
+              <button type="button" class="btn-primary" @click="confirmPay">Confirmar cobro</button>
+            </div>
           </div>
         </div>
-      </div>
+      </Teleport>
     </div>
   </AppShell>
 </template>
@@ -320,10 +322,79 @@ onMounted(load);
 .empty { color:var(--timber-muted); }
 .ok { color: var(--timber-success); font-size: .88rem; margin: .5rem 0 0; }
 .err { color: var(--timber-danger); font-size: .88rem; margin: .5rem 0 0; }
-.modal-bg { position:fixed; inset:0; background:rgba(10,16,14,.48); backdrop-filter:blur(6px); display:flex; align-items:center; justify-content:center; z-index:50; }
-.modal { background:var(--timber-panel); color:var(--timber-ink); border-radius:1.15rem; padding:1.3rem; width:min(22rem,92vw); display:grid; gap:.75rem; border:1px solid var(--timber-line); }
-.modal h3 { margin:0; font-family:var(--font-display); font-weight:700; letter-spacing:-0.01em; }
-.modal label { display:grid; gap:.3rem; font-size:.85rem; }
-.modal select { padding:.65rem; border-radius:.65rem; border:1px solid var(--timber-line); background:var(--timber-panel-elevated); color:var(--timber-ink); }
-.modal-actions { display:flex; justify-content:flex-end; gap:.5rem; }
+.modal-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(10, 16, 14, 0.55);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 1rem;
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+}
+.modal {
+  background: var(--timber-panel);
+  color: var(--timber-ink);
+  border-radius: 1.15rem 1.15rem 0.85rem 0.85rem;
+  padding: 1.35rem 1.25rem calc(1.25rem + env(safe-area-inset-bottom, 0px));
+  width: min(24rem, 100%);
+  max-height: min(85vh, 32rem);
+  overflow: auto;
+  display: grid;
+  gap: 0.85rem;
+  border: 1px solid var(--timber-line);
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.2);
+}
+.modal h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  font-size: 1.35rem;
+}
+.modal label { display: grid; gap: 0.35rem; font-size: 0.9rem; font-weight: 600; }
+.modal select {
+  min-height: 3rem;
+  padding: 0.65rem 0.8rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--timber-line);
+  background: var(--timber-panel-elevated);
+  color: var(--timber-ink);
+  font: inherit;
+}
+.modal-actions {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 0.55rem;
+  margin-top: 0.25rem;
+}
+.modal-actions button {
+  min-height: 3.15rem;
+  border-radius: 0.85rem;
+  border: 1px solid var(--timber-line);
+  background: var(--timber-surface);
+  color: var(--timber-ink);
+  font-weight: 700;
+  font-size: 1rem;
+  cursor: pointer;
+}
+.modal-actions .btn-primary {
+  border: none;
+  background: var(--timber-primary);
+  color: var(--timber-on-primary);
+}
+
+@media (min-width: 720px) {
+  .modal-bg {
+    align-items: center;
+    padding: 1.5rem;
+  }
+  .modal {
+    border-radius: 1.15rem;
+    padding: 1.4rem;
+  }
+}
 </style>
