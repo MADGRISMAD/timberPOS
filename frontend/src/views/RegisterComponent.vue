@@ -4,8 +4,8 @@
 
     <div class="auth-panel">
       <div class="brand-block">
-        <img src="/logo.svg" alt="Timber" class="brand-logo" />
-        <h1 class="brand-name">Timber</h1>
+        <img src="/logo.svg" alt="Mi Tiendita" class="brand-logo" />
+        <h1 class="brand-name"><BrandName /></h1>
         <p class="brand-tagline">Crea la cuenta de administración</p>
       </div>
 
@@ -83,8 +83,10 @@
 <script>
 import { apiService } from "../apiService";
 import { setSession } from "../authStore";
+import BrandName from "../components/BrandName.vue";
 
 export default {
+  components: { BrandName },
   data() {
     return {
       firstName: "",
@@ -220,7 +222,7 @@ export default {
 
 .brand-name {
   font-family: var(--font-display);
-  font-size: 1.75rem;
+  font-size: 1.7rem;
   font-weight: 800;
   letter-spacing: -0.02em;
   margin: 0;

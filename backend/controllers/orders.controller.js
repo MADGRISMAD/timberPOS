@@ -1,5 +1,10 @@
 const db = require('../database/mongodb');
-const { normalizeOrder, orderStatuses, paymentMethods } = require('../models/order.model');
+const { normalizeOrder, orderStatuses, paymentMethods, newToken } = require('../models/order.model');
+
+async function ensureInvoiceToken(order) {
+  if (!order || order.invoiceToken) return order;
+  return db.UpdateOrder(order.id, { invoiceToken: newToken(), updatedAt: new Date() }, order.tenantId);
+}
 
 async function list(req, res) {
   try {
@@ -12,7 +17,7 @@ async function list(req, res) {
 
 async function getById(req, res) {
   try {
-    const order = await db.GetOrderById(req.params.id, req.tenantId);
+    const order = await ensureInvoiceToken(await db.GetOrderById(req.params.id, req.tenantId));
     if (!order) return res.status(404).send('Pedido no encontrado');
     return res.status(200).json(order);
   } catch (err) {
@@ -38,6 +43,7 @@ async function create(req, res) {
 
     const payload = normalizeOrder(body);
     payload.tenantId = req.tenantId;
+    payload.invoiceToken = newToken();
     if (!payload.items.length) {
       return res.status(400).send('El pedido necesita al menos un producto');
     }
@@ -113,6 +119,19 @@ async function pay(req, res) {
     const deliveryFee = Number(existing.deliveryFee || 0);
     const total = Number((totals.total + deliveryFee).toFixed(2));
 
+    const settings = await db.GetSettings(req.tenantId);
+    if (settings?.inventoryEnabled && !existing.inventoryApplied) {
+      for (const item of existing.items || []) {
+        const foodId = item.foodId || item.food;
+        if (!foodId) continue;
+        try {
+          await db.DecrementFoodStock(foodId, item.quantity, req.tenantId);
+        } catch (e) {
+          console.warn('No se pudo descontar stock:', foodId, e.message);
+        }
+      }
+    }
+
     const updated = await db.UpdateOrder(
       req.params.id,
       {
@@ -126,6 +145,7 @@ async function pay(req, res) {
         cardExtraIva,
         cardExtraTax: totals.cardExtraTax,
         total,
+        inventoryApplied: Boolean(settings?.inventoryEnabled),
       },
       req.tenantId
     );
@@ -149,4 +169,93 @@ async function pay(req, res) {
   }
 }
 
-module.exports = { list, getById, create, updateStatus, pay };
+async function markInvoiceIssued(req, res) {
+  try {
+    const order = await db.GetOrderById(req.params.id, req.tenantId);
+    if (!order) return res.status(404).send('Pedido no encontrado');
+    if (!order.invoice || order.invoice.status !== 'requested') {
+      return res.status(400).send('Este ticket no tiene una solicitud de factura pendiente');
+    }
+    const updated = await db.UpdateOrder(
+      order.id,
+      {
+        invoice: {
+          ...order.invoice,
+          status: 'issued',
+          issuedAt: new Date(),
+        },
+        updatedAt: new Date(),
+      },
+      req.tenantId
+    );
+    return res.status(200).json(updated);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).send(err.message || 'Error al marcar la factura');
+  }
+}
+
+async function voidSale(req, res) {
+  try {
+    const existing = await db.GetOrderById(req.params.id, req.tenantId);
+    if (!existing) return res.status(404).send('Pedido no encontrado');
+    if (existing.status === 'cancelled' || existing.paymentStatus === 'refunded') {
+      return res.status(400).send('Esta venta ya está cancelada');
+    }
+
+    if (existing.paymentStatus !== 'paid') {
+      const updated = await db.UpdateOrder(
+        existing.id,
+        { status: 'cancelled', updatedAt: new Date() },
+        req.tenantId
+      );
+      return res.status(200).json(updated);
+    }
+
+    const session = await db.GetOpenCashSession(req.tenantId);
+    if (!session) {
+      return res.status(400).send('Abre la caja para devolver el dinero.');
+    }
+
+    if (existing.inventoryApplied) {
+      for (const item of existing.items || []) {
+        const foodId = item.foodId || item.food;
+        if (!foodId) continue;
+        try {
+          await db.IncrementFoodStock(foodId, item.quantity, req.tenantId);
+        } catch (e) {
+          console.warn('No se pudo regresar stock:', foodId, e.message);
+        }
+      }
+    }
+
+    const sameSession = String(existing.cashSessionId || '') === String(session.id);
+    const method = existing.paymentMethod || 'cash';
+    if (!sameSession && method === 'cash') {
+      const next = Number(session.cashRefunds || 0) + Number(existing.total || 0);
+      await db.UpdateCashSession(
+        session.id,
+        { cashRefunds: Number(next.toFixed(2)), updatedAt: new Date() },
+        req.tenantId
+      );
+    }
+
+    const updated = await db.UpdateOrder(
+      existing.id,
+      {
+        status: 'cancelled',
+        paymentStatus: 'refunded',
+        refundedAt: new Date(),
+        inventoryApplied: false,
+        updatedAt: new Date(),
+      },
+      req.tenantId
+    );
+    return res.status(200).json(updated);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).send(err.message || 'Error al cancelar la venta');
+  }
+}
+
+module.exports = { list, getById, create, updateStatus, pay, markInvoiceIssued, voidSale };

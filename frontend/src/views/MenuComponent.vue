@@ -73,14 +73,17 @@
               </div>
             </div>
 
-            <aside class="total-box">
-              <p class="arts">{{ itemCount }} arts</p>
-              <p class="total-label">Total</p>
-              <p class="total-num">{{ money(total) }}</p>
-              <p class="tax-line">
-                IVA {{ money(tax) }} · Neto {{ money(totals.net) }}
-                <template v-if="ticketDiscount"> · Dcto −{{ ticketDiscount }}%</template>
-              </p>
+            <aside class="price-board" aria-live="polite">
+              <div class="board-screen">
+                <div class="board-row">
+                  <span class="board-name">{{ displayLast ? displayLast.name : 'Esperando producto' }}</span>
+                  <span class="board-price">{{ displayLast ? money(lastLineTotal) : money(0) }}</span>
+                </div>
+                <div class="board-row sum">
+                  <span class="board-kicker">Total</span>
+                  <span class="board-num">{{ money(total) }}</span>
+                </div>
+              </div>
             </aside>
           </div>
 
@@ -183,6 +186,10 @@
           </aside>
 
           <section class="grid-pane">
+            <button type="button" class="magic-open" @click="showMagic = true">
+              <span class="magic-title">Actualizar precios</span>
+              <span class="magic-sub">Con una foto o una lista</span>
+            </button>
             <div class="products">
               <button
                 v-for="producto in productos"
@@ -198,6 +205,9 @@
                 <div class="prod-meta">
                   <span class="pname">{{ producto.name }}</span>
                   <span class="psku">{{ producto.barcode || producto.sku || 'Sin código' }} · {{ producto.priceIncludesTax ? 'Bruto' : 'Neto' }}</span>
+                  <span v-if="inventoryOn" class="pstock" :class="{ low: Number(producto.stock || 0) <= 5 }">
+                    Stock {{ Number(producto.stock) || 0 }}
+                  </span>
                   <span class="price">{{ money(producto.price) }}</span>
                 </div>
               </button>
@@ -206,8 +216,8 @@
                 v-if="selectedMenuId"
                 type="button"
                 class="add-food"
-                @click="showFoodForm = true"
-              >+ Producto</button>
+                @click="openNewFood"
+              >+ Agregar a mano</button>
             </div>
           </section>
         </div>
@@ -230,6 +240,9 @@
             <div v-if="priceResult" class="price-card">
               <strong>{{ priceResult.name }}</strong>
               <span>{{ money(priceResult.price) }}</span>
+              <em v-if="inventoryOn">
+                Stock {{ Number(priceResult.stock) || 0 }}
+              </em>
             </div>
             <p v-if="priceErr" class="scan-msg err">{{ priceErr }}</p>
             <button type="submit" class="act primary">Consultar</button>
@@ -265,40 +278,94 @@
         </div>
       </Teleport>
 
+      <MagicPricesSheet
+        v-if="showMagic"
+        :menus="menus"
+        :default-menu-id="selectedMenuId"
+        @close="showMagic = false"
+        @applied="onMagicApplied"
+        @manual="onMagicManual"
+      />
+
       <Teleport to="body">
-        <div v-if="showFoodForm" class="sheet-bg" @click.self="closeFoodForm">
-          <form class="sheet" @submit.prevent="createFood">
-            <h3>{{ editingFood ? 'Editar' : 'Nuevo' }} producto</h3>
-            <input v-model="foodForm.name" class="inp" placeholder="Nombre" required />
-            <input v-model.number="foodForm.price" class="inp" type="number" min="0" step="0.01" placeholder="Precio" required />
-            <fieldset class="price-mode">
-              <legend>El precio es</legend>
-              <label class="radio">
-                <input v-model="foodForm.priceMode" type="radio" value="net" />
-                <span>Neto <small>sin IVA — se suma al vender</small></span>
+        <div v-if="showFoodForm" class="sheet-bg product-modal" @click.self="closeFoodForm">
+          <form class="sheet product-sheet" @submit.prevent="createFood">
+            <div class="product-banner">
+              <img
+                v-if="foodForm.imgUrl"
+                :key="foodForm.imgUrl"
+                :src="foodForm.imgUrl"
+                alt=""
+                @error="$event.target.style.display = 'none'"
+              />
+              <div class="banner-shade"></div>
+              <button type="button" class="sheet-x" aria-label="Cerrar" @click="closeFoodForm">×</button>
+              <div class="banner-copy">
+                <p class="sheet-kicker">Catálogo</p>
+                <h3>{{ editingFood ? "Editar producto" : "Nuevo producto" }}</h3>
+              </div>
+              <label class="banner-url">
+                <input v-model="foodForm.imgUrl" type="url" placeholder="Pega aquí el link de la foto" />
               </label>
-              <label class="radio">
-                <input v-model="foodForm.priceMode" type="radio" value="gross" />
-                <span>Bruto <small>con IVA incluido</small></span>
-              </label>
-              <p class="price-preview">
-                Neto {{ money(foodPricePreview.net) }}
-                · IVA {{ money(foodPricePreview.tax) }}
-                · Bruto {{ money(foodPricePreview.gross) }}
-              </p>
-            </fieldset>
-            <label class="field">
-              <span>Código de barras / SKU</span>
-              <input v-model="foodForm.barcode" class="inp" placeholder="Escanea o escribe el código" autocomplete="off" />
-            </label>
-            <input v-model="foodForm.description" class="inp" placeholder="Descripción" />
-            <input v-model="foodForm.imgUrl" class="inp" type="url" placeholder="URL de imagen (https://…)" />
-            <div v-if="foodForm.imgUrl" class="preview">
-              <img :src="foodForm.imgUrl" alt="Vista previa" />
             </div>
-            <button type="submit" class="act primary">Guardar</button>
-            <button v-if="editingFood" type="button" class="act danger" @click="deleteFood">Eliminar</button>
-            <button type="button" class="act" @click="closeFoodForm">Cancelar</button>
+
+            <div class="product-body">
+              <label class="field wide">
+                <span>Nombre</span>
+                <input v-model="foodForm.name" class="inp" placeholder="Coca-Cola 600 ml" required />
+              </label>
+
+              <label class="field">
+                <span>Precio</span>
+                <input v-model.number="foodForm.price" class="inp" type="number" min="0" step="0.01" required />
+              </label>
+              <label v-if="inventoryOn" class="field">
+                <span>Existencias</span>
+                <input v-model.number="foodForm.stock" class="inp" type="number" min="0" step="1" />
+              </label>
+              <label v-else class="field">
+                <span>Código de barras</span>
+                <input v-model="foodForm.barcode" class="inp" placeholder="Escanea o escribe" autocomplete="off" />
+              </label>
+
+              <div class="iva-choice wide">
+                <p class="iva-q">¿Este precio ya incluye IVA?</p>
+                <label class="iva-card" :class="{ on: foodForm.priceMode === 'gross' }">
+                  <input v-model="foodForm.priceMode" type="radio" value="gross" />
+                  <span>
+                    <strong>Sí, ya lo incluye</strong>
+                    <small>El cliente paga este precio</small>
+                  </span>
+                </label>
+                <label class="iva-card" :class="{ on: foodForm.priceMode === 'net' }">
+                  <input v-model="foodForm.priceMode" type="radio" value="net" />
+                  <span>
+                    <strong>No, hay que sumarle IVA</strong>
+                    <small>Al cobrar se agrega el 16%</small>
+                  </span>
+                </label>
+                <p class="price-preview">El cliente paga {{ money(foodPricePreview.gross) }}</p>
+              </div>
+
+              <label v-if="inventoryOn" class="field">
+                <span>Código de barras</span>
+                <input v-model="foodForm.barcode" class="inp" placeholder="Escanea o escribe" autocomplete="off" />
+              </label>
+              <label class="field" :class="{ wide: !inventoryOn }">
+                <span>Descripción</span>
+                <input v-model="foodForm.description" class="inp" placeholder="Opcional" />
+              </label>
+            </div>
+
+            <footer class="product-foot" :class="{ editing: editingFood }">
+              <div class="sheet-actions">
+                <button type="button" class="act" @click="closeFoodForm">Cancelar</button>
+                <button type="submit" class="act primary">Guardar producto</button>
+              </div>
+              <button v-if="editingFood" type="button" class="delete-link" @click="deleteFood">
+                Eliminar este producto
+              </button>
+            </footer>
           </form>
         </div>
       </Teleport>
@@ -308,15 +375,16 @@
 
 <script>
 import AppShell from "../components/AppShell.vue";
+import MagicPricesSheet from "../components/MagicPricesSheet.vue";
 import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { apiService } from "../apiService";
 import { store } from "../store";
-import { venueStore } from "../venueStore";
+import { venueStore, fetchVenueSettings } from "../venueStore";
 import { cartTotals, lineBreakdown, TAX_RATE } from "../tax";
 
 export default {
-  components: { AppShell },
+  components: { AppShell, MagicPricesSheet },
   props: {
     initialMode: { type: String, default: "pos" },
   },
@@ -352,6 +420,7 @@ export default {
 
     const showMenuForm = ref(false);
     const showFoodForm = ref(false);
+    const showMagic = ref(false);
     const editingFood = ref(null);
     const menuForm = reactive({ name: "", description: "" });
     const foodForm = reactive({
@@ -360,8 +429,11 @@ export default {
       description: "",
       imgUrl: "",
       barcode: "",
-      priceMode: "net", // net = neto sin IVA, gross = bruto con IVA
+      priceMode: "gross", // gross = el precio ya incluye IVA
+      stock: 0,
     });
+
+    const inventoryOn = computed(() => Boolean(venueStore.inventoryEnabled));
 
     let flashTimer = null;
     let searchTimer = null;
@@ -715,7 +787,30 @@ export default {
       foodForm.imgUrl = producto.imgUrl || "";
       foodForm.barcode = producto.barcode || producto.sku || "";
       foodForm.priceMode = producto.priceIncludesTax ? "gross" : "net";
+      foodForm.stock = Number(producto.stock) || 0;
       showFoodForm.value = true;
+    }
+
+    function openNewFood() {
+      closeFoodForm();
+      if (!selectedMenuId.value && menus.value[0]) {
+        selectedMenuId.value = menus.value[0].id;
+      }
+      if (!selectedMenuId.value) {
+        showMenuForm.value = true;
+        return;
+      }
+      showFoodForm.value = true;
+    }
+
+    function onMagicManual() {
+      showMagic.value = false;
+      openNewFood();
+    }
+
+    async function onMagicApplied() {
+      await fetchVenueSettings().catch(() => {});
+      if (selectedMenuId.value) await loadMenuProducts(selectedMenuId.value);
     }
 
     function closeFoodForm() {
@@ -726,7 +821,8 @@ export default {
       foodForm.description = "";
       foodForm.imgUrl = "";
       foodForm.barcode = "";
-      foodForm.priceMode = "net";
+      foodForm.priceMode = "gross";
+      foodForm.stock = 0;
     }
 
     async function createFood() {
@@ -739,6 +835,7 @@ export default {
         sku: (foodForm.barcode || "").trim(),
         priceIncludesTax: foodForm.priceMode === "gross",
         menuId: selectedMenuId.value,
+        stock: inventoryOn.value ? Number(foodForm.stock) || 0 : Number(foodForm.stock) || 0,
       };
       if (editingFood.value) {
         const updated = await apiService.editFood(editingFood.value.id, payload);
@@ -752,6 +849,8 @@ export default {
 
     async function deleteFood() {
       if (!editingFood.value) return;
+      const name = editingFood.value.name || "este producto";
+      if (!window.confirm(`¿Seguro que quieres quitar “${name}” del catálogo?`)) return;
       await apiService.deleteFood(editingFood.value.id);
       productos.value = productos.value.filter((p) => p.id !== editingFood.value.id);
       closeFoodForm();
@@ -816,10 +915,15 @@ export default {
       priceErr,
       showMenuForm,
       showFoodForm,
+      showMagic,
+      onMagicApplied,
+      onMagicManual,
+      openNewFood,
       menuForm,
       foodForm,
       foodPricePreview,
       editingFood,
+      inventoryOn,
       lastLineQty,
       lastLineTotal,
       ticketPage,
@@ -1007,45 +1111,62 @@ export default {
   cursor: pointer;
 }
 
-.total-box {
-  background: #0d1624;
-  color: #e8eef6;
-  border-radius: 0.6rem;
-  padding: 0.45rem 0.75rem;
-  display: grid;
-  align-content: center;
-  gap: 0.05rem;
+.price-board {
+  background: var(--timber-topbar);
+  border-radius: 0.9rem;
+  padding: 0.4rem;
+  box-shadow: 0 8px 18px rgba(18, 48, 86, 0.16);
 }
-.arts {
-  margin: 0;
-  font-size: 0.75rem;
-  font-weight: 700;
+.board-screen {
+  background: #0b1830;
+  border-radius: 0.6rem;
+  padding: 0.55rem 0.8rem 0.5rem;
+  display: grid;
+  gap: 0.2rem;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), inset 0 10px 24px rgba(0, 0, 0, 0.28);
+}
+.board-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-width: 0;
+}
+.board-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--timber-accent);
+  font-size: 0.82rem;
+  font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #8eb4e0;
 }
-.total-label {
-  margin: 0;
-  font-size: 0.65rem;
+.board-price {
+  flex-shrink: 0;
+  color: var(--timber-accent);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 1.05rem;
   font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: #7a8ea8;
-}
-.total-num {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: clamp(1.7rem, 4.5vw, 2.35rem);
-  font-weight: 800;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.03em;
-  color: #5ec8ff;
-  line-height: 1.05;
 }
-.tax-line {
-  margin: 0.1rem 0 0;
+.board-kicker {
+  color: #8eb4e0;
   font-size: 0.72rem;
-  color: #8a9bb0;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.board-num {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: clamp(1.9rem, 4.2vw, 2.7rem);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  color: #5ec8ff;
+  text-shadow: 0 0 14px rgba(94, 200, 255, 0.35);
 }
 
 .ticket-wrap {
@@ -1261,9 +1382,10 @@ export default {
 
 .price-card {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: baseline;
-  gap: 0.75rem;
+  gap: 0.45rem 0.75rem;
   padding: 0.85rem 0.9rem;
   border-radius: 0.75rem;
   background: var(--timber-surface);
@@ -1275,6 +1397,13 @@ export default {
   font-weight: 800;
   color: var(--timber-primary);
   font-variant-numeric: tabular-nums;
+}
+.price-card em {
+  flex-basis: 100%;
+  font-style: normal;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--timber-muted);
 }
 
 /* —— Catálogo —— */
@@ -1357,6 +1486,25 @@ export default {
   overflow: auto;
   padding: 0.55rem;
 }
+.magic-open {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 0.05rem;
+  min-height: 3.15rem;
+  margin-bottom: 0.55rem;
+  padding: 0.4rem 0.7rem;
+  border: none;
+  border-radius: 0.85rem;
+  background: var(--timber-primary);
+  color: var(--timber-on-primary);
+  font: inherit;
+  cursor: pointer;
+}
+.magic-title { font-weight: 800; font-size: 0.98rem; }
+.magic-sub { font-weight: 700; font-size: 0.78rem; opacity: 0.88; }
 .products {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
@@ -1410,6 +1558,13 @@ export default {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.pstock {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--timber-success);
+  font-variant-numeric: tabular-nums;
+}
+.pstock.low { color: var(--timber-warning); }
 .price {
   font-size: 1.05rem;
   font-weight: 800;
@@ -1444,43 +1599,203 @@ export default {
   border: 1px solid var(--timber-line);
 }
 .sheet h3 { margin: 0; font-family: var(--font-display); font-size: 1.3rem; font-weight: 700; }
+.product-sheet {
+  width: 100%;
+  max-height: 92dvh;
+  overflow: hidden;
+  gap: 0;
+  padding: 0;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  border-radius: 1.2rem 1.2rem 0 0;
+}
+.product-banner {
+  position: relative;
+  height: 9.5rem;
+  background: linear-gradient(160deg, #123056 0%, #1e5aa8 70%, #2f6fbe 100%);
+  overflow: hidden;
+}
+.product-banner img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.banner-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(10, 18, 32, 0.78) 0%, rgba(10, 18, 32, 0.15) 58%, rgba(10, 18, 32, 0.25) 100%);
+  pointer-events: none;
+}
+.banner-copy {
+  position: absolute;
+  left: 1rem;
+  right: 3.4rem;
+  bottom: 3.15rem;
+  z-index: 1;
+}
+.product-banner .sheet-kicker { color: #f3c27a; }
+.product-banner h3 {
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.product-banner .sheet-x {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.65rem;
+  z-index: 2;
+  background: rgba(255, 255, 255, 0.94);
+}
+.banner-url {
+  position: absolute;
+  left: 0.75rem;
+  right: 0.75rem;
+  bottom: 0.55rem;
+  z-index: 1;
+  margin: 0;
+}
+.banner-url input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 2.35rem;
+  border: none;
+  border-radius: 0.65rem;
+  padding: 0.4rem 0.7rem;
+  font: inherit;
+  font-size: 0.92rem;
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--timber-ink);
+}
+.product-body {
+  overflow: auto;
+  padding: 0.75rem 1rem 0.35rem;
+  display: grid;
+  gap: 0.55rem;
+  align-content: start;
+}
+.product-foot {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.65rem 1rem calc(0.75rem + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--timber-line);
+  background: var(--timber-panel);
+}
+.sheet-kicker {
+  margin: 0 0 0.15rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--timber-primary);
+}
+.sheet-x {
+  width: 2.2rem;
+  height: 2.2rem;
+  border: none;
+  border-radius: 0.6rem;
+  background: var(--timber-surface);
+  color: var(--timber-ink);
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+}
+.field-row.solo { grid-template-columns: 1fr; }
+.product-sheet .sheet-actions {
+  display: grid;
+  grid-template-columns: 1fr 1.25fr;
+  gap: 0.55rem;
+  align-items: stretch;
+  margin: 0;
+  position: static;
+  padding: 0;
+  background: none;
+  border: none;
+}
+.product-sheet .sheet-actions .act {
+  width: 100%;
+  min-height: 3.35rem;
+  margin: 0;
+  padding: 0 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  line-height: 1.2;
+  box-sizing: border-box;
+}
+.product-sheet .sheet-actions .act:not(.primary) {
+  border: 1.5px solid var(--timber-line);
+  background: var(--timber-panel);
+}
+.delete-link {
+  justify-self: center;
+  margin: 0;
+  padding: 0.35rem 0.5rem 0.15rem;
+  border: none;
+  background: none;
+  color: var(--timber-danger);
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+.product-sheet .field { gap: 0.2rem; }
+.product-sheet .inp { min-height: 2.65rem; padding: 0.45rem 0.7rem; }
+.product-sheet .wide { grid-column: 1 / -1; }
 .sheet-hint { margin: -0.25rem 0 0; color: var(--timber-muted); font-size: 0.88rem; }
 .field { display: grid; gap: 0.3rem; font-size: 0.82rem; font-weight: 700; color: var(--timber-muted); }
-.price-mode {
-  margin: 0;
-  padding: 0.65rem 0.75rem;
-  border: 1px solid var(--timber-line);
-  border-radius: 0.75rem;
+.iva-choice {
   display: grid;
   gap: 0.45rem;
-  background: var(--timber-surface);
 }
-.price-mode legend {
-  padding: 0 0.35rem;
-  font-size: 0.78rem;
+.iva-q {
+  margin: 0;
+  font-size: 0.95rem;
   font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--timber-muted);
+  color: var(--timber-ink);
 }
-.price-mode .radio {
+.iva-card {
   display: flex;
   align-items: flex-start;
-  gap: 0.55rem;
-  font-weight: 700;
-  color: var(--timber-ink);
+  gap: 0.7rem;
+  margin: 0;
+  padding: 0.75rem 0.8rem;
+  border: 1.5px solid var(--timber-line);
+  border-radius: 0.85rem;
+  background: var(--timber-panel);
   cursor: pointer;
 }
-.price-mode .radio small {
+.iva-card.on {
+  border-color: var(--timber-primary);
+  background: color-mix(in srgb, var(--timber-primary) 8%, var(--timber-panel));
+}
+.iva-card input {
+  margin-top: 0.2rem;
+  width: 1.15rem;
+  height: 1.15rem;
+  accent-color: var(--timber-primary);
+  flex-shrink: 0;
+}
+.iva-card strong {
   display: block;
+  font-size: 0.98rem;
+  color: var(--timber-ink);
+}
+.iva-card small {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.82rem;
   font-weight: 500;
   color: var(--timber-muted);
-  font-size: 0.78rem;
-  margin-top: 0.1rem;
-}
-.price-mode input[type="radio"] {
-  margin-top: 0.2rem;
-  accent-color: var(--timber-primary);
+  line-height: 1.3;
 }
 .price-preview {
   margin: 0.15rem 0 0;
@@ -1489,6 +1804,15 @@ export default {
   font-variant-numeric: tabular-nums;
   color: var(--timber-primary);
 }
+.sheet .check {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--timber-ink);
+}
+.sheet .check input { width: 1.1rem; height: 1.1rem; accent-color: var(--timber-primary); }
 .inp {
   min-height: 3rem;
   border: 1px solid var(--timber-line);
@@ -1512,11 +1836,6 @@ export default {
 }
 .act.primary { background: var(--timber-primary); color: var(--timber-on-primary); }
 .act.danger { background: var(--timber-danger-soft); color: var(--timber-danger); }
-.preview {
-  width: 100%; aspect-ratio: 16/9; border-radius: 0.75rem; overflow: hidden;
-  background: var(--timber-surface); border: 1px solid var(--timber-line);
-}
-.preview img { width: 100%; height: 100%; object-fit: cover; }
 
 @media (max-width: 767.98px) {
   .fkey {
@@ -1530,20 +1849,8 @@ export default {
     gap: 0.35rem;
     padding: 0.35rem 0.45rem;
   }
-  .total-box {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 0.5rem;
-    padding: 0.45rem 0.65rem;
-  }
-  .total-box .arts,
-  .total-box .tax-line { display: none; }
-  .total-label { margin: 0; }
-  .total-num {
-    font-size: 1.55rem;
-    margin: 0;
-  }
+  .price-board { order: -1; }
+  .board-num { font-size: 2.15rem; }
   .scan-input { min-height: 2.85rem; font-size: 1.05rem; }
   .c-code,
   .c-price,
@@ -1561,10 +1868,10 @@ export default {
 
 @media (min-width: 768px) and (max-width: 1099.98px) {
   .desk-top {
-    grid-template-columns: 1.2fr 0.8fr;
+    grid-template-columns: 1.15fr 0.95fr;
   }
+  .board-num { font-size: 2.35rem; }
   .fkey { min-width: 4.4rem; }
-  .total-num { font-size: 2rem; }
   .manage-body {
     grid-template-columns: 8.5rem 1fr;
     grid-template-rows: 1fr;
@@ -1583,9 +1890,9 @@ export default {
 
 @media (min-width: 1100px) {
   .desk-top {
-    grid-template-columns: minmax(18rem, 1.15fr) minmax(14rem, 0.7fr);
+    grid-template-columns: minmax(16rem, 1fr) minmax(18rem, 0.9fr);
   }
-  .total-num { font-size: 2.55rem; }
+  .board-num { font-size: 2.85rem; }
   .fkey { min-width: 5rem; min-height: 2.85rem; }
   .manage-body {
     grid-template-columns: 10rem 1fr;
@@ -1601,6 +1908,53 @@ export default {
   .sheet-bg { align-items: center; padding: 1rem; }
   .sheet { border-radius: 1.15rem; }
   .toolbar-right .seg:first-child { display: none; }
+}
+
+@media (min-width: 768px) {
+  .product-sheet {
+    width: min(48rem, calc(100vw - 2rem));
+    max-height: calc(100dvh - 2rem);
+    overflow: hidden;
+    border-radius: 1.15rem;
+  }
+  .product-banner { height: 8.25rem; }
+  .product-body {
+    overflow: hidden;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 0.75rem;
+    row-gap: 0.45rem;
+    padding: 0.7rem 1rem 0.35rem;
+  }
+  .iva-choice {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.4rem 0.55rem;
+  }
+  .iva-q,
+  .price-preview { grid-column: 1 / -1; }
+  .iva-card { padding: 0.5rem 0.65rem; }
+  .product-foot { padding: 0.65rem 1rem 0.8rem; }
+  .product-foot.editing {
+    grid-template-columns: minmax(16rem, 1fr) auto;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .product-foot.editing .delete-link {
+    justify-self: end;
+    padding: 0.35rem 0.15rem;
+  }
+}
+
+@media (min-width: 1100px) {
+  .product-sheet { width: min(52rem, calc(100vw - 2rem)); }
+}
+
+@media (min-width: 768px) and (max-height: 760px) {
+  .product-banner { height: 6.5rem; }
+  .banner-copy { bottom: 2.7rem; }
+  .product-banner .sheet-kicker { display: none; }
+  .product-banner h3 { font-size: 1.05rem; }
+  .product-sheet .inp { min-height: 2.35rem; }
+  .iva-card { padding: 0.4rem 0.55rem; }
 }
 
 </style>

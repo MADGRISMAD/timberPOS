@@ -1,8 +1,8 @@
 <template>
   <div class="invite-shell">
     <div class="invite-panel">
-      <img src="/logo.svg" alt="Timber" class="logo" />
-      <h1>Únete a Timber</h1>
+      <img src="/logo.svg" alt="Mi Tiendita" class="logo" />
+      <h1>Únete a <BrandName /></h1>
       <p v-if="loading">Validando invitación…</p>
       <p v-else-if="error" class="err">{{ error }}</p>
       <template v-else>
@@ -23,6 +23,7 @@
 
 <script setup>
 import { onMounted, reactive, ref } from "vue";
+import BrandName from "../components/BrandName.vue";
 import { useRoute, useRouter } from "vue-router";
 import { apiService } from "../apiService";
 import { setSession, homeForRole } from "../authStore";

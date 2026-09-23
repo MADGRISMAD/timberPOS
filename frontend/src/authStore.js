@@ -81,6 +81,10 @@ export const routeRoles = {
   setup: ["admin"],
   billing: ["admin", "cashier"],
   platform: ["platform_admin"],
+  platformClients: ["platform_admin"],
+  platformRevenue: ["platform_admin"],
+  platformAi: ["platform_admin"],
+  platformExpenses: ["platform_admin"],
   printOrder: ["admin", "cashier"],
   printCash: ["admin", "cashier"],
 };

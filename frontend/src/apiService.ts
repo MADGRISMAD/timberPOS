@@ -2,14 +2,36 @@ import axios from 'axios';
 import { authStore, clearSession } from './authStore';
 
 const envUrl = (import.meta as { env?: Record<string, string> }).env?.VITE_API_URL;
-const publicUrl =
-  envUrl ||
-  (typeof window !== 'undefined' && window.location.hostname === 'localhost'
-    ? 'http://localhost:8081/'
-    : '/api/');
+
+function resolveApiBase() {
+  if (envUrl) return envUrl.endsWith('/') ? envUrl : `${envUrl}/`;
+  // En desarrollo el proxy de Vite (/api → :8081) funciona en localhost y en la LAN del celular.
+  if ((import.meta as { env?: Record<string, unknown> }).env?.DEV) return '/api/';
+  if (
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  ) {
+    return 'http://localhost:8081/';
+  }
+  return '/api/';
+}
+
+const publicUrl = resolveApiBase();
 
 axios.defaults.baseURL = publicUrl;
 axios.defaults.headers.common['Content-Type'] = 'application/json';
+
+/** Origen usable desde el celular (QR de factura). En LAN usa la IP de la Mac. */
+export function appPublicOrigin() {
+  if (typeof window === 'undefined') return '';
+  const lan = (import.meta as { env?: Record<string, string> }).env?.VITE_LAN_HOST;
+  const host = window.location.hostname;
+  if (lan && (host === 'localhost' || host === '127.0.0.1')) {
+    const port = window.location.port || '5173';
+    return `http://${lan}:${port}`;
+  }
+  return window.location.origin;
+}
 
 axios.interceptors.request.use((config) => {
   const token = authStore.token;
@@ -27,7 +49,7 @@ axios.interceptors.response.use(
       clearSession();
       if (
         typeof window !== 'undefined' &&
-        !window.location.pathname.match(/^\/($|login|register|invite|forgot|reset)/)
+        !window.location.pathname.match(/^\/($|login|register|invite|forgot|reset|factura)/)
       ) {
         window.location.href = '/login';
       }
@@ -84,6 +106,7 @@ export const apiService = {
     sku?: string;
     barcode?: string;
     priceIncludesTax?: boolean;
+    stock?: number | null;
   }) {
     return axios.post('/foods', foodDTO).then((r) => r.data);
   },
@@ -126,6 +149,18 @@ export const apiService = {
     return axios
       .put(`/orders/${orderId}/pay`, { paymentMethod, cardExtraIva: Boolean(opts.cardExtraIva) })
       .then((r) => r.data);
+  },
+  voidOrder(orderId: string) {
+    return axios.put(`/orders/${orderId}/void`).then((r) => r.data);
+  },
+  markInvoiceIssued(orderId: string) {
+    return axios.put(`/orders/${orderId}/invoice`).then((r) => r.data);
+  },
+  getPublicInvoice(token: string) {
+    return axios.get(`/invoices/public/${token}`).then((r) => r.data);
+  },
+  submitPublicInvoice(token: string, payload: Record<string, string>) {
+    return axios.post(`/invoices/public/${token}`, payload).then((r) => r.data);
   },
   editOrderAsCompleted(orderId: string) {
     return this.updateOrderStatus(orderId, 'served');
@@ -221,14 +256,65 @@ export const apiService = {
   billingCheckout(plan: string, email?: string, interval: 'month' | 'year' = 'month') {
     return axios.post('/billing/checkout', { plan, email, interval }).then((r) => r.data);
   },
+  billingSync(preapprovalId?: string) {
+    return axios.post('/billing/sync', { preapprovalId }).then((r) => r.data);
+  },
   billingDevActivate(plan: string, preapprovalId?: string, interval: 'month' | 'year' = 'month') {
     return axios
       .post('/billing/dev/activate', { plan, preapprovalId, interval })
       .then((r) => r.data);
   },
 
+  aiQuota() {
+    return axios.get('/ai/quota').then((r) => r.data);
+  },
+  aiPreview(payload: { text?: string; imageBase64?: string; mimeType?: string }) {
+    return axios.post('/ai/preview', payload, { timeout: 130_000 }).then((r) => r.data);
+  },
+  aiApply(
+    updates: { id: string; price?: number; cost?: number; stockIn?: number }[],
+    creates?: {
+      name: string;
+      price: number;
+      cost?: number;
+      barcode?: string;
+      menuId: string;
+      stock?: number;
+      stockIn?: number;
+    }[]
+  ) {
+    return axios.post('/ai/apply', { updates, creates: creates || [] }).then((r) => r.data);
+  },
+
+  platformOverview() {
+    return axios.get('/platform/overview').then((r) => r.data);
+  },
+  platformReport() {
+    return axios.get('/platform/report', { responseType: 'text' }).then((r) => r.data);
+  },
+  platformCreateExpense(payload: { label: string; amount: number; note?: string }) {
+    return axios.post('/platform/expenses', payload).then((r) => r.data);
+  },
+  platformDeleteExpense(id: string) {
+    return axios.delete(`/platform/expenses/${id}`).then((r) => r.data);
+  },
   platformListTenants() {
     return axios.get('/platform/tenants').then((r) => r.data);
+  },
+  platformGetTenant(id: string) {
+    return axios.get(`/platform/tenants/${id}`).then((r) => r.data);
+  },
+  platformUpdateTenant(id: string, payload: Record<string, unknown>) {
+    return axios.patch(`/platform/tenants/${id}`, payload).then((r) => r.data);
+  },
+  platformClientMail(id: string) {
+    return axios.get(`/platform/tenants/${id}/mail`).then((r) => r.data);
+  },
+  platformSendClientMail(id: string, payload: { to?: string; subject: string; message: string }) {
+    return axios.post(`/platform/tenants/${id}/mail`, payload).then((r) => r.data);
+  },
+  platformInbox() {
+    return axios.get('/platform/inbox').then((r) => r.data);
   },
   platformSuspendTenant(id: string, reason: string) {
     return axios.post(`/platform/tenants/${id}/suspend`, { reason }).then((r) => r.data);

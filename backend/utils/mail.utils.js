@@ -1,10 +1,32 @@
 const nodemailer = require('nodemailer');
+const templates = require('./mail-templates');
 
 function hasSmtpConfig() {
-  return Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+  return Boolean(
+    process.env.RESEND_API_KEY ||
+      (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) ||
+      (process.env.SMTP_SERVICE && process.env.SMTP_USER && process.env.SMTP_PASS)
+  );
+}
+
+function mailFrom() {
+  return (
+    process.env.MAIL_FROM ||
+    process.env.SMTP_USER ||
+    'Mi Tiendita <onboarding@mitiendita.software>'
+  );
 }
 
 function createTransport() {
+  if (process.env.SMTP_SERVICE) {
+    return nodemailer.createTransport({
+      service: process.env.SMTP_SERVICE,
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    });
+  }
   return nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port: Number(process.env.SMTP_PORT || 587),
@@ -16,56 +38,127 @@ function createTransport() {
   });
 }
 
-async function sendInviteEmail({ to, inviteUrl, role, businessName }) {
-  const subject = `Invitación a Timber${businessName ? ` — ${businessName}` : ''}`;
-  const html = `
-    <div style="font-family:sans-serif;line-height:1.5;color:#1c1f1d">
-      <h2>Te invitaron a Timber</h2>
-      <p>Te invitaron a unirte${businessName ? ` a <strong>${businessName}</strong>` : ''} con el rol <strong>${role}</strong>.</p>
-      <p><a href="${inviteUrl}" style="display:inline-block;padding:10px 16px;background:#1F4D3A;color:#fff;text-decoration:none;border-radius:8px">Aceptar invitación</a></p>
-      <p style="font-size:12px;color:#66706a">O copia este enlace:<br>${inviteUrl}</p>
-    </div>
-  `;
-
-  if (!hasSmtpConfig()) {
-    console.log('[mail:dev-fallback] Invite email not sent (SMTP missing). Link:', inviteUrl);
-    return { sent: false, fallback: true, inviteUrl };
+async function sendViaResend({ to, subject, html }) {
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: mailFrom(),
+      to: [to],
+      subject,
+      html,
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = data?.message || data?.error || `Resend HTTP ${res.status}`;
+    throw new Error(msg);
   }
+  return { sent: true, provider: 'resend', id: data.id || null };
+}
 
+async function sendViaSmtp({ to, subject, html }) {
   const transport = createTransport();
-  await transport.sendMail({
-    from: process.env.MAIL_FROM || process.env.SMTP_USER,
+  const info = await transport.sendMail({
+    from: mailFrom(),
     to,
     subject,
     html,
   });
-  return { sent: true, fallback: false, inviteUrl };
+  return { sent: true, provider: 'smtp', id: info.messageId || null };
+}
+
+async function sendMail({ to, subject, html }) {
+  const recipient = String(to || '').trim().toLowerCase();
+  if (!recipient || !recipient.includes('@')) {
+    throw new Error('Destinatario de correo inválido');
+  }
+  if (!hasSmtpConfig()) {
+    const err = new Error(
+      'Correo no configurado. En backend/.env agrega SMTP (o RESEND_API_KEY) para enviar emails.'
+    );
+    err.code = 'MAIL_NOT_CONFIGURED';
+    throw err;
+  }
+  if (process.env.RESEND_API_KEY) {
+    return sendViaResend({ to: recipient, subject, html });
+  }
+  return sendViaSmtp({ to: recipient, subject, html });
+}
+
+async function sendTemplated(to, built) {
+  const result = await sendMail({ to, subject: built.subject, html: built.html });
+  return { ...result, subject: built.subject };
+}
+
+async function sendInviteEmail({ to, inviteUrl, role, businessName }) {
+  const built = templates.inviteEmail({ inviteUrl, role, businessName });
+  const result = await sendTemplated(to, built);
+  return { ...result, inviteUrl };
 }
 
 async function sendPasswordResetEmail({ to, resetUrl }) {
-  const subject = 'Restablecer contraseña — Timber';
-  const html = `
-    <div style="font-family:sans-serif;line-height:1.5;color:#1c1f1d">
-      <h2>Restablecer contraseña</h2>
-      <p>Recibimos una solicitud para cambiar tu contraseña.</p>
-      <p><a href="${resetUrl}" style="display:inline-block;padding:10px 16px;background:#1F4D3A;color:#fff;text-decoration:none;border-radius:8px">Elegir nueva contraseña</a></p>
-      <p style="font-size:12px;color:#66706a">El enlace expira en 1 hora.<br>${resetUrl}</p>
-    </div>
-  `;
-
-  if (!hasSmtpConfig()) {
-    console.log('[mail:dev-fallback] Reset email not sent (SMTP missing). Link:', resetUrl);
-    return { sent: false, fallback: true, resetUrl };
-  }
-
-  const transport = createTransport();
-  await transport.sendMail({
-    from: process.env.MAIL_FROM || process.env.SMTP_USER,
-    to,
-    subject,
-    html,
-  });
-  return { sent: true, fallback: false, resetUrl };
+  const built = templates.passwordResetEmail({ resetUrl });
+  const result = await sendTemplated(to, built);
+  return { ...result, resetUrl };
 }
 
-module.exports = { sendInviteEmail, sendPasswordResetEmail, hasSmtpConfig };
+async function sendInvoiceRequestCustomerEmail({
+  to,
+  storeName,
+  folio,
+  total,
+  rfc,
+}) {
+  return sendTemplated(
+    to,
+    templates.invoiceCustomerEmail({ storeName, folio, total, rfc, email: to })
+  );
+}
+
+async function sendInvoiceRequestStoreEmail({
+  to,
+  storeName,
+  folio,
+  total,
+  invoice,
+}) {
+  return sendTemplated(
+    to,
+    templates.invoiceStoreEmail({ storeName, folio, total, invoice })
+  );
+}
+
+async function verifyMailConfig() {
+  if (!hasSmtpConfig()) {
+    console.warn(
+      '[mail] Sin SMTP/Resend: invitaciones, recuperación y facturas no enviarán correo.'
+    );
+    return false;
+  }
+  if (process.env.RESEND_API_KEY) {
+    console.log('[mail] Proveedor: Resend');
+    return true;
+  }
+  try {
+    await createTransport().verify();
+    console.log(`[mail] SMTP listo → ${process.env.SMTP_HOST || process.env.SMTP_SERVICE}`);
+    return true;
+  } catch (err) {
+    console.error('[mail] SMTP configurado pero no conecta:', err.message);
+    return false;
+  }
+}
+
+module.exports = {
+  hasSmtpConfig,
+  sendMail,
+  sendInviteEmail,
+  sendPasswordResetEmail,
+  sendInvoiceRequestCustomerEmail,
+  sendInvoiceRequestStoreEmail,
+  verifyMailConfig,
+};

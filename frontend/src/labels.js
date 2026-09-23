@@ -11,6 +11,7 @@ export const orderStatusLabel = {
 export const paymentStatusLabel = {
   unpaid: "Sin pagar",
   paid: "Pagado",
+  refunded: "Devuelta",
 };
 
 export const modalityLabel = {

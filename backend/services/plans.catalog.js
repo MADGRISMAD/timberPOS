@@ -1,14 +1,14 @@
 /**
- * Catálogo comercial Timber POS (MXN) — SaaS 100% nube.
+ * Catálogo comercial Mi Tiendita (MXN) — SaaS 100% nube.
  * Inventario Mágico = actualización de precios/catálogo con IA (cuotas por plan).
  */
 const PLANS = ['basic', 'growth', 'pro'];
 
-/** null = ilimitado (uso justo) */
+/** Usos de Inventario Mágico (Gemini) por mes calendario. */
 const AI_QUOTAS = {
   basic: 2,
   growth: 10,
-  pro: null,
+  pro: 30,
 };
 
 const PLAN_CATALOG = {
@@ -16,7 +16,7 @@ const PLAN_CATALOG = {
     id: 'basic',
     name: 'Básico',
     tagline: 'Entra desde cualquier pantalla y cobra',
-    pitch: 'Se daña la PC del cajero? Abres Timber en una tablet o el celular y sigues vendiendo al instante.',
+    pitch: 'Se daña la PC del cajero? Abres Mi Tiendita en una tablet o el celular y sigues vendiendo al instante.',
     priceMonth: Number(process.env.MP_PLAN_BASIC_PRICE || 150),
     priceYear: Number(process.env.MP_PLAN_BASIC_YEAR_PRICE || 1500),
     aiQuota: AI_QUOTAS.basic,
@@ -58,7 +58,7 @@ const PLAN_CATALOG = {
     highlight: false,
     features: [
       'Todo lo de Crecimiento',
-      'Inventario Mágico ilimitado',
+      '30 actualizaciones con Inventario Mágico al mes',
       'Lee facturas de proveedores con la cámara',
       'Tablero en vivo de todas tus sucursales',
       'Hardware de caja si lo necesitas',
@@ -84,9 +84,9 @@ function planPrice(planId, interval = 'month') {
 
 function planLabel(planId, interval = 'month') {
   const p = getPlan(planId);
-  if (!p) return 'Timber';
+  if (!p) return 'Mi Tiendita';
   const suf = interval === 'year' ? ' anual' : '';
-  return `Timber ${p.name}${suf}`;
+  return `Mi Tiendita ${p.name}${suf}`;
 }
 
 function formatAiQuota(quota) {

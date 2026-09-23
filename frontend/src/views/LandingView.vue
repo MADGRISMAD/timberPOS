@@ -8,7 +8,7 @@
     <header class="nav">
       <a href="#top" class="nav-brand">
         <img src="/logo.svg" alt="" width="36" height="36" />
-        <span>Timber</span>
+        <span><BrandName tone="dark" /></span>
       </a>
       <nav class="nav-links" aria-label="Secciones">
         <a href="#dispositivos">Dispositivos</a>
@@ -33,7 +33,7 @@
         <div class="hero-inner">
           <div class="hero-copy">
             <p class="eyebrow">POS en la nube para abarrotes</p>
-            <h1>Timber</h1>
+            <h1><BrandName tone="dark" /></h1>
             <p class="hero-line">
               La misma caja en el celular, la tablet o la PC. Sin instalar.
             </p>
@@ -173,7 +173,7 @@
           <h2>Superior a los sistemas locales</h2>
           <p class="section-lede">
             Cero instalaciones. Cero bases de datos en la PC del cajero.
-            Si la computadora falla, abres Timber en una tablet o el celular y sigues cobrando.
+            Si la computadora falla, abres Mi Tiendita en una tablet o el celular y sigues cobrando.
           </p>
           <ul class="pillars">
             <li>
@@ -206,7 +206,7 @@
           <h2>¿Qué es Inventario Mágico?</h2>
           <p class="section-lede">
             El dueño anota en un papelito: “Coca 600ml a 22, Sabritas a 18”.
-            Pega ese texto (o una foto de la factura del camión) y Timber actualiza
+            Pega ese texto (o una foto de la factura del camión) y Mi Tiendita actualiza
             el catálogo solo — sin buscar producto por producto.
           </p>
 
@@ -244,8 +244,8 @@ Aceite 1L  48 pesos</pre>
           </div>
 
           <p class="magic-note">
-            Incluido en todos los planes, con distinta cantidad de usos al mes.
-            En Pro también lee la foto de la factura impresa del proveedor.
+            Pegas el texto o una foto. Cada revisión cuenta como un uso del mes:
+            Básico 2, Crecimiento 10 y Pro 30.
           </p>
         </div>
       </section>
@@ -258,12 +258,41 @@ Aceite 1L  48 pesos</pre>
             Prueba 14 días. Cancela cuando quieras. Pagos en MXN.
           </p>
 
+          <div class="billing-toggle" role="group" aria-label="Periodo de pago">
+            <span :class="{ on: billingInterval === 'month' }">Mensual</span>
+            <button
+              type="button"
+              class="toggle-track"
+              :class="{ annual: billingInterval === 'year' }"
+              :aria-pressed="billingInterval === 'year'"
+              aria-label="Cambiar a facturación anual"
+              @click="billingInterval = billingInterval === 'month' ? 'year' : 'month'"
+            >
+              <span class="toggle-thumb" />
+            </button>
+            <span :class="{ on: billingInterval === 'year' }">
+              Anual
+              <em class="save-pill">Ahorra 2 meses</em>
+            </span>
+          </div>
+
           <div class="plan-grid">
             <article v-for="p in plans" :key="p.id" :class="{ hot: p.highlight }">
               <p v-if="p.badge" class="badge">{{ p.badge }}</p>
               <h3>{{ p.name }}</h3>
               <p class="tag">{{ p.tagline }}</p>
-              <p class="price">${{ formatInt(p.price) }} <span>/ mes</span></p>
+              <template v-if="billingInterval === 'month'">
+                <p class="price">${{ formatInt(p.price) }} <span>/ mes</span></p>
+              </template>
+              <template v-else>
+                <p class="price">
+                  ${{ formatInt(planYearPrice(p)) }}
+                  <span>/ año</span>
+                </p>
+                <p class="price-note">
+                  ~${{ formatInt(planMonthlyFromYear(p)) }}/mes · ahorras 2 meses
+                </p>
+              </template>
               <p class="im-line">
                 <InventarioMagicoTerm /> · {{ p.aiQuotaLabel }}
               </p>
@@ -273,7 +302,7 @@ Aceite 1L  48 pesos</pre>
               <router-link
                 class="btn"
                 :class="p.highlight ? 'amber' : 'blue'"
-                :to="loggedIn ? { name: 'billing' } : '/register'"
+                :to="planCtaTo"
               >
                 {{ loggedIn ? "Ver en facturación" : "Empezar" }}
               </router-link>
@@ -327,7 +356,7 @@ Aceite 1L  48 pesos</pre>
     </main>
 
     <footer class="foot">
-      <span>Timber</span>
+      <BrandName />
       <router-link to="/login">Ingresar</router-link>
       <router-link to="/register">Registro</router-link>
     </footer>
@@ -335,6 +364,7 @@ Aceite 1L  48 pesos</pre>
 </template>
 
 <script setup>
+import BrandName from "../components/BrandName.vue";
 import { computed, onMounted, onUnmounted, ref, nextTick, watch } from "vue";
 import { useRoute } from "vue-router";
 import { apiService } from "../apiService";
@@ -348,11 +378,29 @@ const reduceMotion = ref(false);
 let raf = 0;
 let pendingScroll = 0;
 const plans = ref([]);
+const billingInterval = ref("month");
 const loggedIn = computed(() => Boolean(authStore.token));
 const homeRoute = computed(() => homeForRole());
+const planCtaTo = computed(() => {
+  if (loggedIn.value) {
+    return {
+      name: "billing",
+      query: billingInterval.value === "year" ? { interval: "year" } : undefined,
+    };
+  }
+  return "/register";
+});
 
 function formatInt(n) {
   return Number(n || 0).toLocaleString("es-MX");
+}
+
+function planYearPrice(p) {
+  return p.priceYear ?? Math.round(Number(p.price || 0) * 10);
+}
+
+function planMonthlyFromYear(p) {
+  return p.monthlyFromYear ?? Math.round(planYearPrice(p) / 12);
 }
 
 function drift(speed) {
@@ -376,6 +424,8 @@ const fallbackPlans = [
     name: "Básico",
     tagline: "Entra desde cualquier pantalla y cobra",
     price: 150,
+    priceYear: 1500,
+    monthlyFromYear: 125,
     aiQuotaLabel: "2 al mes",
     highlight: false,
     badge: null,
@@ -391,6 +441,8 @@ const fallbackPlans = [
     name: "Crecimiento",
     tagline: "Pedidos y cobro donde estés",
     price: 399,
+    priceYear: 3990,
+    monthlyFromYear: 333,
     aiQuotaLabel: "10 al mes",
     highlight: true,
     badge: "Recomendado",
@@ -406,12 +458,14 @@ const fallbackPlans = [
     name: "Pro",
     tagline: "Varias sucursales, un solo tablero",
     price: 799,
-    aiQuotaLabel: "Ilimitado",
+    priceYear: 7990,
+    monthlyFromYear: 666,
+    aiQuotaLabel: "30 al mes",
     highlight: false,
     badge: null,
     features: [
       "Todo lo de Crecimiento",
-      "Inventario Mágico ilimitado",
+      "Inventario Mágico: 30 al mes",
       "Foto de facturas de proveedores",
       "Tablero de todas las sucursales",
     ],
@@ -1018,8 +1072,70 @@ main,
 }
 .magic-note { margin: 0.9rem 0 0; color: var(--timber-muted); font-size: 0.9rem; line-height: 1.45; }
 
+.billing-toggle {
+  margin-top: 1.15rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem 0.75rem;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--timber-muted);
+}
+.billing-toggle > span.on { color: var(--timber-ink); }
+.toggle-track {
+  position: relative;
+  width: 3.1rem;
+  height: 1.7rem;
+  padding: 0;
+  border: 1px solid var(--timber-line);
+  border-radius: 999px;
+  background: var(--timber-panel);
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+.toggle-track.annual {
+  background: var(--timber-primary-soft);
+  border-color: var(--timber-primary);
+}
+.toggle-thumb {
+  position: absolute;
+  top: 0.18rem;
+  left: 0.18rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  background: var(--timber-ink);
+  transition: transform 0.22s ease;
+}
+.toggle-track.annual .toggle-thumb {
+  transform: translateX(1.35rem);
+  background: var(--timber-primary);
+}
+.save-pill {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  font-style: normal;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  background: var(--timber-primary-soft);
+  color: var(--timber-primary);
+  vertical-align: middle;
+}
+.price-note {
+  margin: -0.1rem 0 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--timber-primary);
+}
+
 .plan-grid {
-  margin-top: 1.4rem;
+  margin-top: 1.1rem;
   display: grid;
   gap: 0.75rem;
 }

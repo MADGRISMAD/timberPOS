@@ -5,7 +5,8 @@ const waitlist = require('../models/waitlist.model');
 const jwtCreator = require('../utils/jwt.utils');
 const db = require('../database/mongodb');
 const { createTenantDoc, newResetToken, ROLES } = require('../models/tenant.model');
-const { sendPasswordResetEmail } = require('../utils/mail.utils');
+const { sendPasswordResetEmail, hasSmtpConfig } = require('../utils/mail.utils');
+const { resolveAppUrl } = require('../utils/app-url.utils');
 
 const CreateUser = async (req, res) => {
   try {
@@ -159,6 +160,13 @@ const AddWaitList = async (req, res) => {
 
 const ForgotPassword = async (req, res) => {
   try {
+    if (!hasSmtpConfig()) {
+      return res
+        .status(503)
+        .send(
+          'Correo no configurado. En backend/.env agrega SMTP (o RESEND_API_KEY) para enviar emails.'
+        );
+    }
     const email = String(req.body?.email || '').trim().toLowerCase();
     if (!email) return res.status(400).send('Email requerido');
 
@@ -173,7 +181,7 @@ const ForgotPassword = async (req, res) => {
       resetExpires: new Date(Date.now() + 60 * 60 * 1000),
     });
 
-    const appUrl = (process.env.APP_URL || 'http://localhost:5173').replace(/\/$/, '');
+    const appUrl = resolveAppUrl(req);
     const resetUrl = `${appUrl}/reset/${token}`;
     const mail = await sendPasswordResetEmail({ to: email, resetUrl });
 

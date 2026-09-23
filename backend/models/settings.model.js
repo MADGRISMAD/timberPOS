@@ -16,6 +16,8 @@ const settingsSchema = Joi.object({
     .default('#C4A574'),
   timezone: Joi.string().default('America/Mexico_City'),
   initialTables: Joi.number().integer().min(0).max(100).default(0),
+  /** Si true, todas las ventas restan existencias de cada producto */
+  inventoryEnabled: Joi.boolean().default(false),
   setupCompleted: Joi.boolean().default(true),
   updatedAt: Joi.date().optional(),
   createdAt: Joi.date().optional(),

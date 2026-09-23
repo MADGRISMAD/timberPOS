@@ -3,7 +3,7 @@
     <div class="flex items-center justify-center py-4">
       <img
         :src="logoSrc"
-        alt="Timber"
+        alt="Mi Tiendita"
         class="w-9 h-9 rounded-lg object-cover"
       />
     </div>

@@ -1,5 +1,5 @@
 /**
- * Crea o actualiza el usuario platform_admin de Timber.
+ * Crea o actualiza el usuario platform_admin de Mi Tiendita.
  * Uso:
  *   PLATFORM_ADMIN_EMAIL=ops@timber.com PLATFORM_ADMIN_PASSWORD='Secreta123!' node scripts/create-platform-admin.js
  */
@@ -25,7 +25,7 @@ async function main() {
   });
 
   const doc = {
-    name: 'Timber',
+    name: 'Mi Tiendita',
     lastName: 'Platform',
     email,
     username,

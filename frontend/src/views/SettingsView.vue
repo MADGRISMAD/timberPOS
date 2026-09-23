@@ -40,7 +40,7 @@
 
       <section v-else-if="tab === 'appearance'" class="panel">
         <h2>Apariencia</h2>
-        <p class="hint">Paleta Timber fija (verde bosque + acento bronce). Solo eliges claro u oscuro.</p>
+        <p class="hint">Paleta fija (azul y ámbar). Solo eliges claro u oscuro.</p>
         <div class="theme-switch" role="group" aria-label="Tema de interfaz">
           <button type="button" :class="{ on: !isDark }" @click="setLight">
             <span class="theme-ico" aria-hidden="true">☀</span>
@@ -61,7 +61,7 @@
 
       <section v-else-if="tab === 'team'" class="panel">
         <h2>Invitar al equipo</h2>
-        <p class="hint">Se envía un correo con enlace para unirse. Si SMTP no está configurado, el link aparece en la consola del backend.</p>
+        <p class="hint">Se envía un correo con el enlace para unirse al equipo.</p>
         <form class="invite-form" @submit.prevent="sendInvite">
           <label>Correo<input v-model="invite.email" type="email" required placeholder="persona@negocio.com" /></label>
           <label>Rol
@@ -94,6 +94,18 @@
 
       <section v-else class="panel">
         <h2>Preferencias</h2>
+        <label class="check-row">
+          <input v-model="form.inventoryEnabled" type="checkbox" />
+          <span>
+            <strong>Llevar inventario</strong>
+            <small>Al cobrar, se resta la cantidad de todos los productos. Si lo apagas, las ventas no tocan existencias.</small>
+          </span>
+        </label>
+        <button type="button" class="btn-primary" :disabled="saving" @click="savePrefs">
+          {{ saving ? "Guardando…" : "Guardar preferencias" }}
+        </button>
+        <p v-if="prefsMsg" class="ok">{{ prefsMsg }}</p>
+        <hr class="prefs-rule" />
         <p class="hint">Puedes volver a ejecutar el asistente de configuración inicial.</p>
         <router-link to="/setup" class="link">Volver a ejecutar el wizard</router-link>
       </section>
@@ -133,10 +145,12 @@ const form = reactive({
   accentColor: venueStore.accentColor || "#C4A574",
   timezone: venueStore.timezone || "America/Mexico_City",
   initialTables: venueStore.initialTables || 8,
+  inventoryEnabled: Boolean(venueStore.inventoryEnabled),
 });
 
 const saving = ref(false);
 const message = ref("");
+const prefsMsg = ref("");
 const invites = ref([]);
 const inviting = ref(false);
 const inviteMsg = ref("");
@@ -156,6 +170,32 @@ async function saveBrand() {
   }
 }
 
+async function savePrefs() {
+  saving.value = true;
+  prefsMsg.value = "";
+  try {
+    await saveVenueSettings({
+      businessName: venueStore.businessName || form.businessName,
+      businessType: venueStore.businessType || form.businessType,
+      address: venueStore.address || form.address,
+      phone: venueStore.phone || form.phone,
+      logoUrl: venueStore.logoUrl || form.logoUrl,
+      primaryColor: venueStore.primaryColor || form.primaryColor,
+      accentColor: venueStore.accentColor || form.accentColor,
+      timezone: venueStore.timezone || form.timezone,
+      initialTables: venueStore.initialTables || form.initialTables,
+      inventoryEnabled: form.inventoryEnabled,
+    });
+    prefsMsg.value = form.inventoryEnabled
+      ? "Inventario activado. Aplica a todo el catálogo."
+      : "Inventario desactivado.";
+  } catch {
+    prefsMsg.value = "No se pudo guardar.";
+  } finally {
+    saving.value = false;
+  }
+}
+
 async function loadInvites() {
   try {
     invites.value = (await apiService.getInvites()) || [];
@@ -170,9 +210,7 @@ async function sendInvite() {
   inviteErr.value = "";
   try {
     const res = await apiService.createInvite({ email: invite.email, role: invite.role });
-    inviteMsg.value = res.mail?.fallback
-      ? "Invitación creada. Revisa la consola del backend (SMTP no configurado)."
-      : "Invitación enviada por correo.";
+    inviteMsg.value = "Invitación enviada por correo.";
     invite.email = "";
     await loadInvites();
   } catch (e) {
@@ -205,6 +243,26 @@ onMounted(loadInvites);
 .panel h2 { margin:0 0 .75rem; font-family:var(--font-display); font-size:1.35rem; font-weight:700; letter-spacing:-0.01em; }
 .panel h3 { margin:1.25rem 0 .6rem; font-size:.95rem; }
 .hint { color:var(--timber-muted); font-size:.9rem; margin:0 0 .9rem; line-height:1.45; }
+.check-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  margin: 0 0 1rem;
+  padding: 0.85rem 0.9rem;
+  border-radius: 0.85rem;
+  border: 1px solid var(--timber-line);
+  background: var(--timber-panel-elevated);
+  cursor: pointer;
+}
+.check-row input { margin-top: 0.2rem; width: 1.1rem; height: 1.1rem; flex-shrink: 0; }
+.check-row span { display: grid; gap: 0.25rem; }
+.check-row strong { color: var(--timber-ink); font-size: 0.95rem; }
+.check-row small { color: var(--timber-muted); font-size: 0.82rem; line-height: 1.4; font-weight: 500; }
+.prefs-rule {
+  border: none;
+  border-top: 1px solid var(--timber-line);
+  margin: 1.25rem 0 1rem;
+}
 .theme-switch {
   display: flex;
   gap: 0.5rem;

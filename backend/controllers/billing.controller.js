@@ -8,8 +8,46 @@ function daysLeft(trialEndsAt) {
   return Math.max(0, Math.ceil(ms / (24 * 60 * 60 * 1000)));
 }
 
+function periodEndFor(interval) {
+  const periodEnd = new Date();
+  if (interval === 'year') periodEnd.setFullYear(periodEnd.getFullYear() + 1);
+  else periodEnd.setMonth(periodEnd.getMonth() + 1);
+  return periodEnd;
+}
+
+async function applyPreapprovalToTenant(tenant, pre, dataId) {
+  const billingStatus = mp.mapMpStatusToBilling(pre.status);
+  if (!tenant || !billingStatus) return null;
+
+  const patch = {
+    billingStatus,
+    mpPreapprovalId: String(dataId || pre.id || tenant.mpPreapprovalId || ''),
+  };
+
+  if (billingStatus === 'active') {
+    const parts = String(pre.external_reference || '').split(':');
+    const plan = parts[1];
+    const interval = parts[2] === 'year' ? 'year' : 'month';
+    patch.currentPeriodEnd = periodEndFor(interval);
+    patch.billingInterval = interval;
+    patch.suspendedAt = null;
+    patch.suspendedReason = null;
+    if (PLANS.includes(plan)) patch.plan = plan;
+  }
+  if (billingStatus === 'suspended') {
+    patch.suspendedAt = new Date();
+    patch.suspendedReason = 'mercado_pago';
+  }
+
+  return db.UpdateTenant(tenant.id, patch);
+}
+
 async function getPlans(req, res) {
-  return res.status(200).json({ plans: mp.listPlans(), mock: !mp.hasMpConfig() });
+  return res.status(200).json({
+    plans: mp.listPlans(),
+    mock: !mp.hasMpConfig(),
+    sandbox: mp.hasMpConfig() ? mp.isMpSandbox() : false,
+  });
 }
 
 async function getStatus(req, res) {
@@ -26,7 +64,9 @@ async function getStatus(req, res) {
       currentPeriodEnd: tenant.currentPeriodEnd || null,
       active: isSubscriptionActive(tenant),
       mpConfigured: mp.hasMpConfig(),
+      mpSandbox: mp.hasMpConfig() ? mp.isMpSandbox() : false,
       mpPreapprovalId: tenant.mpPreapprovalId || null,
+      mpPayerEmail: tenant.mpPayerEmail || null,
       aiQuota: mp.planAiQuota(plan),
       aiQuotaLabel: mp.formatAiQuota(mp.planAiQuota(plan)),
     });
@@ -53,12 +93,35 @@ async function checkout(req, res) {
       null;
 
     let email = payerEmail;
+    if (!email && mp.isMpSandbox() && process.env.MP_TEST_PAYER_EMAIL) {
+      email = String(process.env.MP_TEST_PAYER_EMAIL).trim();
+    }
     if (!email) {
       const user = await db.FindUserByUsername(req.user.username);
       email = user?.email || null;
     }
     if (!email) {
-      return res.status(400).send('Email de cobro requerido');
+      return res
+        .status(400)
+        .send(
+          mp.isMpSandbox()
+            ? 'En modo prueba indica el email del usuario Comprador (Cuentas de prueba en Mercado Pago).'
+            : 'Necesitamos un correo para cobrar en Mercado Pago.'
+        );
+    }
+
+    if (mp.isMpSandbox()) {
+      const looksPersonal =
+        /@(gmail|googlemail|hotmail|outlook|live|yahoo|icloud|me)\./i.test(email) ||
+        email === 'madgrismad@gmail.com';
+      // No bloqueamos del todo (a veces MP da @testuser.com), pero avisamos en logs
+      if (looksPersonal) {
+        console.warn(
+          '[mp] Sandbox con email personal:',
+          email,
+          '— MP suele exigir usuario de prueba (Comprador).'
+        );
+      }
     }
 
     const preapproval = await mp.createPreapproval({
@@ -83,10 +146,17 @@ async function checkout(req, res) {
       amount: preapproval.amount || mp.planPrice(plan, interval),
       init_point: preapproval.init_point || preapproval.sandbox_init_point,
       sandbox_init_point: preapproval.sandbox_init_point || preapproval.init_point,
+      sandbox: mp.isMpSandbox(),
+      localReturn: Boolean(preapproval.localReturn),
     });
   } catch (err) {
     console.error(err);
-    return res.status(err.status || 500).send(err.message || 'Error al crear checkout');
+    let msg = err.message || 'Error al crear checkout';
+    if (/payer|collector/i.test(msg)) {
+      msg =
+        'En modo prueba, pagador y cobrador deben ser usuarios de prueba de Mercado Pago. Crea un Comprador en «Cuentas de prueba» y usa ese correo (no tu Gmail).';
+    }
+    return res.status(err.status || 500).send(msg);
   }
 }
 
@@ -101,15 +171,12 @@ async function devActivate(req, res) {
     if (!PLANS.includes(plan)) {
       return res.status(400).send('plan debe ser basic, growth o pro');
     }
-    const periodEnd = new Date();
-    if (interval === 'year') periodEnd.setFullYear(periodEnd.getFullYear() + 1);
-    else periodEnd.setMonth(periodEnd.getMonth() + 1);
 
     const updated = await db.UpdateTenant(req.tenantId, {
       plan,
       billingInterval: interval,
       billingStatus: 'active',
-      currentPeriodEnd: periodEnd,
+      currentPeriodEnd: periodEndFor(interval),
       suspendedAt: null,
       suspendedReason: null,
       mpPreapprovalId: req.body?.preapprovalId || `mock_dev_${Date.now()}`,
@@ -128,12 +195,48 @@ async function devActivate(req, res) {
   }
 }
 
+/**
+ * Tras volver de Mercado Pago (?mp=return), consulta el preapproval
+ * y actualiza el tenant. Útil en local sin webhook público.
+ */
+async function sync(req, res) {
+  try {
+    const tenant = await db.GetTenantById(req.tenantId);
+    if (!tenant) return res.status(404).send('Tenant no encontrado');
+
+    const preapprovalId =
+      String(req.body?.preapprovalId || '').trim() || tenant.mpPreapprovalId;
+
+    if (!preapprovalId) {
+      return res.status(400).send('No hay suscripción de Mercado Pago pendiente');
+    }
+
+    if (!mp.hasMpConfig()) {
+      return res.status(400).send('Mercado Pago no está configurado');
+    }
+
+    const pre = await mp.getPreapproval(preapprovalId);
+    const updated = await applyPreapprovalToTenant(tenant, pre, preapprovalId);
+
+    return res.status(200).json({
+      ok: true,
+      mpStatus: pre.status,
+      billingStatus: updated?.billingStatus || tenant.billingStatus,
+      plan: updated?.plan || tenant.plan,
+      active: isSubscriptionActive(updated || tenant),
+      pending: String(pre.status || '').toLowerCase() === 'pending',
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(err.status || 500).send(err.message || 'Error al sincronizar pago');
+  }
+}
+
 async function webhook(req, res) {
   try {
     const body = req.body || {};
     const query = req.query || {};
 
-    // MP puede mandar ?topic=subscription_preapproval&id=...
     const topic = body.type || body.topic || query.topic || query.type;
     const dataId =
       body.data?.id ||
@@ -142,48 +245,31 @@ async function webhook(req, res) {
       query['data.id'] ||
       null;
 
-    if (dataId && String(topic || '').includes('preapproval')) {
+    console.log('[mp:webhook]', { topic, dataId, query, bodyKeys: Object.keys(body) });
+
+    const topicStr = String(topic || '').toLowerCase();
+    const isPreapproval =
+      topicStr.includes('preapproval') || topicStr.includes('subscription');
+
+    if (dataId && isPreapproval) {
       const pre = await mp.getPreapproval(dataId);
-      const billingStatus = mp.mapMpStatusToBilling(pre.status);
-      let tenant =
-        (await db.GetTenantByMpPreapprovalId(dataId)) ||
-        null;
+      let tenant = (await db.GetTenantByMpPreapprovalId(dataId)) || null;
 
       if (!tenant && pre.external_reference) {
         const tenantId = String(pre.external_reference).split(':')[0];
         tenant = await db.GetTenantById(tenantId);
       }
 
-      if (tenant && billingStatus) {
-        const patch = {
-          billingStatus,
-          mpPreapprovalId: String(dataId),
-        };
-        if (billingStatus === 'active') {
-          const parts = String(pre.external_reference || '').split(':');
-          const plan = parts[1];
-          const interval = parts[2] === 'year' ? 'year' : 'month';
-          const periodEnd = new Date();
-          if (interval === 'year') periodEnd.setFullYear(periodEnd.getFullYear() + 1);
-          else periodEnd.setMonth(periodEnd.getMonth() + 1);
-          patch.currentPeriodEnd = periodEnd;
-          patch.billingInterval = interval;
-          patch.suspendedAt = null;
-          patch.suspendedReason = null;
-          if (PLANS.includes(plan)) patch.plan = plan;
-        }
-        if (billingStatus === 'suspended') {
-          patch.suspendedAt = new Date();
-          patch.suspendedReason = 'mercado_pago';
-        }
-        await db.UpdateTenant(tenant.id, patch);
+      if (tenant) {
+        await applyPreapprovalToTenant(tenant, pre, dataId);
+      } else {
+        console.warn('[mp:webhook] tenant no encontrado para', dataId, pre.external_reference);
       }
     }
 
     return res.status(200).json({ ok: true });
   } catch (err) {
     console.error('MP webhook error:', err.message);
-    // Siempre 200 para que MP no reintente agresivo en errores de parseo
     return res.status(200).json({ ok: false });
   }
 }
@@ -192,6 +278,7 @@ module.exports = {
   getPlans,
   getStatus,
   checkout,
+  sync,
   devActivate,
   webhook,
   daysLeft,

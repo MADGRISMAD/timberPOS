@@ -8,7 +8,7 @@
   >
     Inventario Mágico
     <span v-if="showHover" :id="tipId" class="im-tip" role="tooltip">
-      Pegas el papelito de precios nuevos (o una foto de la factura) y Timber
+      Pegas el papelito de precios nuevos (o una foto de la factura) y Mi Tiendita
       actualiza tu catálogo en segundos — desde la nube, sin buscar producto por producto.
     </span>
   </component>

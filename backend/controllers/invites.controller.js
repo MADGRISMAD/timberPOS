@@ -1,6 +1,7 @@
 const db = require('../database/mongodb');
 const { newToken } = require('../models/order.model');
 const { sendInviteEmail } = require('../utils/mail.utils');
+const { resolveAppUrl } = require('../utils/app-url.utils');
 const bcrypt = require('../utils/bcrypt.utils');
 const jwtCreator = require('../utils/jwt.utils');
 const { TENANT_ROLES } = require('../models/tenant.model');
@@ -43,14 +44,21 @@ async function create(req, res) {
       createdAt: new Date(),
     });
 
-    const appUrl = (process.env.APP_URL || 'http://localhost:5173').replace(/\/$/, '');
+    const appUrl = resolveAppUrl(req);
     const inviteUrl = `${appUrl}/invite/${token}`;
-    const mail = await sendInviteEmail({
-      to: email,
-      inviteUrl,
-      role,
-      businessName: settings?.businessName,
-    });
+    let mail;
+    try {
+      mail = await sendInviteEmail({
+        to: email,
+        inviteUrl,
+        role,
+        businessName: settings?.businessName || settings?.venueName || settings?.name,
+      });
+    } catch (mailErr) {
+      await db.DeleteInvite(String(invite.id), req.tenantId).catch(() => {});
+      const status = mailErr.code === 'MAIL_NOT_CONFIGURED' ? 503 : 502;
+      return res.status(status).send(mailErr.message || 'No se pudo enviar el correo de invitación');
+    }
 
     return res.status(201).json({ ...invite, mail });
   } catch (err) {

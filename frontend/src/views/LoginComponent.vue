@@ -4,8 +4,8 @@
 
     <div class="auth-panel">
       <div class="brand-block">
-        <img src="/logo.svg" alt="Timber" class="brand-logo" />
-        <h1 class="brand-name">Timber</h1>
+        <img src="/logo.svg" alt="Mi Tiendita" class="brand-logo" />
+        <h1 class="brand-name"><BrandName /></h1>
         <p class="brand-tagline">POS para tu tienda de abarrotes</p>
       </div>
 
@@ -36,8 +36,10 @@
 import { apiService } from "../apiService";
 import { setSession, homeForRole } from "../authStore";
 import { fetchVenueSettings, isSetupComplete } from "../venueStore";
+import BrandName from "../components/BrandName.vue";
 
 export default {
+  components: { BrandName },
   data() {
     return {
       username: "",
@@ -109,7 +111,8 @@ export default {
 }
 .brand-name {
   font-family: var(--font-display);
-  font-size: 2.1rem;
+  font-size: 1.9rem;
+  letter-spacing: -0.03em;
   margin: 0;
   color: var(--timber-primary, #1e5aa8);
   font-weight: 800;

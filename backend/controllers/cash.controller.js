@@ -55,7 +55,7 @@ async function close(req, res) {
     const orders = await db.GetOrdersByCashSession(session.id, req.tenantId);
     const totals = summarizeOrders(orders);
     const countedCash = Number(req.body?.countedCash ?? 0);
-    const expectedCash = Number(session.openingFloat || 0) + totals.cash;
+    const expectedCash = Number(session.openingFloat || 0) + totals.cash - Number(session.cashRefunds || 0);
     const difference = Number((countedCash - expectedCash).toFixed(2));
 
     const closed = await db.UpdateCashSession(

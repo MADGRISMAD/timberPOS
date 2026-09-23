@@ -82,7 +82,18 @@ async function getFood(req, res) {
 
 async function createFood(req, res) {
   try {
-    const { name, price, description, imgUrl, menuId, sku, barcode, priceIncludesTax } = req.body || {};
+    const {
+      name,
+      price,
+      cost,
+      description,
+      imgUrl,
+      menuId,
+      sku,
+      barcode,
+      priceIncludesTax,
+      stock,
+    } = req.body || {};
     if (!name || price == null || !menuId) {
       return res.status(400).send('name, price y menuId son requeridos');
     }
@@ -90,6 +101,7 @@ async function createFood(req, res) {
     const created = await db.CreateFood({
       name,
       price: Number(price),
+      cost: cost == null || cost === '' ? 0 : Math.max(0, Number(cost) || 0),
       priceIncludesTax: Boolean(priceIncludesTax),
       description: description || '',
       imgUrl: imgUrl || '',
@@ -97,6 +109,7 @@ async function createFood(req, res) {
       barcode: code,
       menuId: String(menuId),
       tenantId: req.tenantId,
+      stock: stock == null || stock === '' ? 0 : Math.max(0, Number(stock) || 0),
     });
     return res.status(201).json(created);
   } catch (err) {
@@ -117,6 +130,13 @@ async function updateFood(req, res) {
       body.priceIncludesTax = Boolean(body.priceIncludesTax);
     }
     if (body.price != null) body.price = Number(body.price);
+    if (body.cost != null && body.cost !== '') {
+      body.cost = Math.max(0, Number(body.cost) || 0);
+    }
+    delete body.trackStock;
+    if (body.stock != null && body.stock !== '') {
+      body.stock = Math.max(0, Number(body.stock) || 0);
+    }
     const updated = await db.UpdateFood(req.params.id, body, req.tenantId);
     if (!updated) return res.status(404).send('Producto no encontrado');
     return res.status(200).json(updated);

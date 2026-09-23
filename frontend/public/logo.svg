@@ -1,6 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
-  <rect width="120" height="120" rx="24" fill="#1F4D3A"/>
-  <path d="M32 78V42h12.5c8.4 0 13.6 4.4 13.6 11.4 0 4.6-2.4 8.2-6.4 9.8L64 78H50.2l-10.2-13.2H44V78H32zm12-24.8h.8c3.2 0 5-1.6 5-4.2s-1.8-4-5-4H44v8.2z" fill="#F7F4EF"/>
-  <path d="M68 78V42h18.4c11.2 0 18.2 6.8 18.2 18S97.6 78 86.4 78H68zm12-10.2h6.2c5.4 0 8.6-3.2 8.6-7.8s-3.2-7.8-8.6-7.8H80v15.6z" fill="#C4A574"/>
-  <rect x="28" y="86" width="64" height="4" rx="2" fill="#C4A574" opacity="0.7"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none" role="img" aria-label="Timber">
+  <rect width="120" height="120" rx="28" fill="#1E5AA8"/>
+  <g fill="#FFFFFF">
+    <rect x="55" y="48" width="10" height="40" rx="2"/>
+    <rect x="46" y="84" width="28" height="8" rx="4"/>
+    <circle cx="60" cy="34" r="13"/>
+    <circle cx="44" cy="46" r="12"/>
+    <circle cx="76" cy="46" r="12"/>
+    <circle cx="60" cy="50" r="7"/>
+    <circle cx="52" cy="60" r="9"/>
+    <circle cx="68" cy="60" r="9"/>
+  </g>
 </svg>

@@ -83,7 +83,7 @@
         <p class="center thanks">Fin de corte de caja</p>
         <p class="center muted">Conserve este comprobante</p>
         <p class="center folio-bar">*{{ shortId(session.id) }}*</p>
-        <p class="center tiny">Timber POS</p>
+        <p class="center tiny brand-print"><span class="mi">Mi</span><span class="rest"> Tiendita</span></p>
       </template>
     </div>
   </div>
@@ -252,6 +252,9 @@ onMounted(async () => {
 .thanks { margin: 6px 0 2px; font-size: 12px; font-weight: 700; }
 .folio-bar { margin: 8px 0 2px; font-size: 13px; letter-spacing: 0.12em; font-weight: 700; }
 .tiny { margin: 2px 0 0; font-size: 9px; color: #666; }
+.brand-print { font-weight: 800; }
+.brand-print .mi { color: #e08a1e; }
+.brand-print .rest { color: #1e5aa8; }
 .err { color: #b42318; }
 p { margin: 0; }
 

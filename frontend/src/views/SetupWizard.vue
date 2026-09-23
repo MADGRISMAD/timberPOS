@@ -4,9 +4,9 @@
 
     <div class="setup-panel">
       <header class="setup-brand">
-        <img src="/logo.svg" alt="Timber" class="setup-logo" />
+        <img src="/logo.svg" alt="Mi Tiendita" class="setup-logo" />
         <div>
-          <p class="setup-eyebrow">Timber</p>
+          <p class="setup-eyebrow"><BrandName /></p>
           <h1 class="setup-title">Configura tu operación</h1>
         </div>
       </header>
@@ -18,7 +18,7 @@
 
       <!-- Paso 1: Bienvenida -->
       <section v-if="step === 1" class="step-body">
-        <h2>Bienvenido a Timber</h2>
+        <h2>Bienvenido a <BrandName /></h2>
         <p>
           POS para tiendas de abarrotes y comercios de barrio.
           En unos minutos personalizas tu tienda y empiezas a vender en mostrador.
@@ -149,6 +149,7 @@
 import { computed, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import { saveVenueSettings, venueStore } from "../venueStore";
+import BrandName from "../components/BrandName.vue";
 
 const router = useRouter();
 const step = ref(1);
@@ -298,9 +299,9 @@ async function finish() {
 }
 
 .setup-eyebrow {
-  font-size: 0.75rem;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
+  font-size: 0.78rem;
+  letter-spacing: -0.03em;
+  text-transform: none;
   color: var(--primary, #1e5aa8);
   font-weight: 600;
   margin: 0;

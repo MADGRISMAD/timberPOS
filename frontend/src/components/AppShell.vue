@@ -4,7 +4,7 @@
       <div class="brand">
         <img :src="logoSrc" alt="" class="brand-logo" />
         <div class="brand-text">
-          <p class="brand-name hide-mobile">Timber</p>
+          <p class="brand-name hide-mobile"><BrandName tone="dark" /></p>
           <p class="brand-venue">{{ businessName }}</p>
         </div>
       </div>
@@ -16,6 +16,8 @@
           :key="'top-' + item.to"
           :to="item.to"
           class="top-nav-item"
+          active-class=""
+          exact-active-class="router-link-active"
         >
           <span class="dock-ico" v-html="item.icon"></span>
           {{ item.label }}
@@ -32,7 +34,7 @@
         >
           {{ isDark ? '☀' : '☾' }}
         </button>
-        <button type="button" class="icon-btn" @click="moreOpen = !moreOpen" aria-label="Más opciones">
+        <button v-if="moreItems.length" type="button" class="icon-btn" @click="moreOpen = !moreOpen" aria-label="Más opciones">
           Más
         </button>
         <button type="button" class="icon-btn ghost only-pc" @click="logout">Salir</button>
@@ -79,6 +81,8 @@
         :key="item.to"
         :to="item.to"
         class="dock-item"
+        active-class=""
+        exact-active-class="router-link-active"
       >
         <span class="dock-ico" v-html="item.icon"></span>
         <span class="dock-label">{{ item.label }}</span>
@@ -91,8 +95,9 @@
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { venueStore } from "../venueStore";
+import BrandName from "./BrandName.vue";
 import { themeStore, toggleUiTheme } from "../themeStore";
-import { clearSession, canAccessRoute, hasRole } from "../authStore";
+import { clearSession, canAccessRoute, hasRole, isPlatformAdmin } from "../authStore";
 import { apiService } from "../apiService";
 
 const route = useRoute();
@@ -106,7 +111,8 @@ const isDesk = computed(() =>
   ["pos", "products", "orders"].includes(String(route.name || ""))
 );
 
-const businessName = computed(() => venueStore.businessName || "Mi negocio");
+const ownerMode = computed(() => isPlatformAdmin());
+const businessName = computed(() => (ownerMode.value ? "Soporte" : venueStore.businessName || "Mi negocio"));
 const logoSrc = computed(() => venueStore.logoUrl || "/logo.svg");
 const isDark = computed(() => themeStore.mode === "dark");
 const clock = computed(() =>
@@ -120,7 +126,7 @@ const billingBanner = computed(() => {
     return { tone: "danger", text: "Pago pendiente — regulariza tu suscripción." };
   }
   if (s.billingStatus === "suspended") {
-    return { tone: "danger", text: "Cuenta suspendida — contacta a Timber o paga tu plan." };
+    return { tone: "danger", text: "Cuenta suspendida — contacta a Mi Tiendita o paga tu plan." };
   }
   if (s.billingStatus === "trialing" && Number(s.trialDaysLeft) <= 3) {
     return {
@@ -135,7 +141,17 @@ const ico = {
   sell: `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16l-1.2 12.2a2 2 0 01-2 1.8H7.2a2 2 0 01-2-1.8L4 7z"/><path d="M8 7V5a4 4 0 018 0v2"/></svg>`,
   products: `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>`,
   cash: `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg>`,
+  spark: `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l1.6 5.2L19 10l-5.4 1.8L12 17l-1.6-5.2L5 10l5.4-1.8L12 3z"/></svg>`,
+  receipt: `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h12v18l-2.2-1.4L12 21l-3.8-1.4L6 21V3z"/><path d="M9 8h6M9 12h6"/></svg>`,
 };
+
+const ownerDock = [
+  { to: "/platform", name: "platform", label: "Resumen", icon: ico.cash },
+  { to: "/platform/clientes", name: "platformClients", label: "Clientes", icon: ico.products },
+  { to: "/platform/ganancias", name: "platformRevenue", label: "Ganancias", icon: ico.sell },
+  { to: "/platform/ia", name: "platformAi", label: "Gastos IA", icon: ico.spark },
+  { to: "/platform/gastos", name: "platformExpenses", label: "Gastos", icon: ico.receipt },
+];
 
 const allDock = [
   { to: "/pos", name: "pos", label: "Vender", icon: ico.sell },
@@ -150,7 +166,7 @@ const allMore = [
   { to: "/settings", name: "settings", label: "Configuración" },
 ];
 
-const dock = computed(() => allDock.filter((i) => canAccessRoute(i.name)));
+const dock = computed(() => (ownerMode.value ? ownerDock : allDock.filter((i) => canAccessRoute(i.name))));
 const moreItems = computed(() => allMore.filter((i) => canAccessRoute(i.name)));
 
 function logout() {
@@ -245,9 +261,9 @@ onUnmounted(() => clearInterval(timer));
 }
 .brand-name {
   margin: 0;
-  font-size: 0.62rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  font-size: 0.95rem;
+  letter-spacing: -0.03em;
+  text-transform: none;
   color: color-mix(in srgb, var(--timber-topbar-text) 62%, #7eb0e8);
   font-weight: 700;
 }

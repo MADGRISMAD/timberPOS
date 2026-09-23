@@ -123,6 +123,22 @@ async function ListTenants() {
 async function CountUsersByTenant(tenantId) {
   return dbConnection.collection('users').countDocuments({ tenantId: String(tenantId) });
 }
+async function ListUsersByTenant(tenantId) {
+  const users = await dbConnection
+    .collection('users')
+    .find({ tenantId: String(tenantId) })
+    .project({ password: 0, resetToken: 0, resetExpires: 0 })
+    .toArray();
+  return users.map((user) => ({
+    id: String(user._id),
+    name: user.name || '',
+    lastName: user.lastName || '',
+    username: user.username || '',
+    email: user.email || '',
+    cellphone: user.cellphone || '',
+    role: user.role || '',
+  }));
+}
 async function GetTenantByMpPreapprovalId(preapprovalId) {
   if (!preapprovalId) return null;
   return withId(
@@ -163,6 +179,21 @@ async function FindUserByResetToken(token) {
     resetToken: token,
     resetExpires: { $gt: new Date() },
   });
+}
+async function ListTenantAdminEmails(tenantId) {
+  if (!tenantId) return [];
+  const users = await dbConnection
+    .collection('users')
+    .find({ tenantId: String(tenantId), role: 'admin' })
+    .project({ email: 1 })
+    .toArray();
+  return [
+    ...new Set(
+      users
+        .map((u) => String(u.email || '').trim().toLowerCase())
+        .filter((e) => e.includes('@'))
+    ),
+  ];
 }
 
 async function AddMesa(data) {
@@ -289,6 +320,31 @@ async function UpdateFood(id, data, tenantId) {
   await dbConnection.collection('foods').updateOne(filter, { $set: clean });
   return GetFoodById(id, tenantId);
 }
+/** Resta existencias al cobrar. No bloquea la venta; el stock no baja de 0. */
+async function DecrementFoodStock(id, quantity, tenantId) {
+  const filter = oidFilter(id, tenantId);
+  if (!filter) return null;
+  const food = await dbConnection.collection('foods').findOne(filter);
+  if (!food) return null;
+  const qty = Math.max(0, Number(quantity) || 0);
+  if (!qty) return withId(food);
+  const current = Math.max(0, Number(food.stock) || 0);
+  const next = Math.max(0, current - qty);
+  await dbConnection.collection('foods').updateOne(filter, { $set: { stock: next } });
+  return GetFoodById(id, tenantId);
+}
+/** Suma piezas al inventario (entrada por compra / pack). */
+async function IncrementFoodStock(id, quantity, tenantId) {
+  const filter = oidFilter(id, tenantId);
+  if (!filter) return null;
+  const food = await dbConnection.collection('foods').findOne(filter);
+  if (!food) return null;
+  const qty = Math.max(0, Math.floor(Number(quantity) || 0));
+  if (!qty) return withId(food);
+  const current = Math.max(0, Number(food.stock) || 0);
+  await dbConnection.collection('foods').updateOne(filter, { $set: { stock: current + qty } });
+  return GetFoodById(id, tenantId);
+}
 async function DeleteFood(id, tenantId) {
   const filter = oidFilter(id, tenantId);
   if (!filter) return { deletedCount: 0 };
@@ -352,6 +408,11 @@ async function GetOrderById(id, tenantId) {
   if (!filter) return null;
   return withId(await dbConnection.collection('orders').findOne(filter));
 }
+async function GetOrderByInvoiceToken(token) {
+  const key = String(token || '').trim();
+  if (!key) return null;
+  return withId(await dbConnection.collection('orders').findOne({ invoiceToken: key }));
+}
 async function CreateOrder(data) {
   const result = await dbConnection.collection('orders').insertOne(data);
   return withId(await dbConnection.collection('orders').findOne({ _id: result.insertedId }));
@@ -405,6 +466,132 @@ async function CreateCashSession(data) {
   const result = await dbConnection.collection('cash_sessions').insertOne(data);
   return withId(await dbConnection.collection('cash_sessions').findOne({ _id: result.insertedId }));
 }
+function aiMonthKey(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Mexico_City',
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(date);
+  const year = parts.find((p) => p.type === 'year')?.value;
+  const month = parts.find((p) => p.type === 'month')?.value;
+  return `${year}-${month}`;
+}
+
+async function GetAiUsage(tenantId, month = aiMonthKey()) {
+  const doc = await dbConnection.collection('ai_usage').findOne({
+    tenantId: String(tenantId),
+    month,
+  });
+  return doc ? Number(doc.count) || 0 : 0;
+}
+
+/** Reserva 1 uso si todavía hay cupo. null = ya se acabó. */
+let aiIndexReady = false;
+async function ReserveAiUse(tenantId, limit, month = aiMonthKey()) {
+  const col = dbConnection.collection('ai_usage');
+  if (!aiIndexReady) {
+    await col.createIndex({ tenantId: 1, month: 1 }, { unique: true }).catch(() => {});
+    aiIndexReady = true;
+  }
+  const key = { tenantId: String(tenantId), month };
+  await col.updateOne(
+    key,
+    { $setOnInsert: { count: 0, createdAt: new Date() } },
+    { upsert: true }
+  );
+  const filter = limit == null ? key : { ...key, count: { $lt: Number(limit) } };
+  const raw = await col.findOneAndUpdate(
+    filter,
+    { $inc: { count: 1 }, $set: { updatedAt: new Date() } },
+    { returnDocument: 'after' }
+  );
+  const doc = raw && raw.value !== undefined ? raw.value : raw;
+  if (!doc) return null;
+  const used = Number(doc.count) || 0;
+  return {
+    used,
+    limit: limit == null ? null : Number(limit),
+    remaining: limit == null ? null : Math.max(0, Number(limit) - used),
+    month,
+  };
+}
+
+async function RefundAiUse(tenantId, month = aiMonthKey()) {
+  await dbConnection.collection('ai_usage').updateOne(
+    { tenantId: String(tenantId), month, count: { $gt: 0 } },
+    { $inc: { count: -1 }, $set: { updatedAt: new Date() } }
+  );
+}
+
+async function ListAiUsage(month = aiMonthKey()) {
+  const list = await dbConnection.collection('ai_usage').find({ month }).toArray();
+  return list.map((doc) => ({
+    tenantId: String(doc.tenantId),
+    count: Number(doc.count) || 0,
+  }));
+}
+
+async function ListAiUsageAll() {
+  const list = await dbConnection.collection('ai_usage').find({}).toArray();
+  return list.map((doc) => ({
+    month: doc.month || '',
+    count: Number(doc.count) || 0,
+  }));
+}
+
+async function ListPlatformExpenses(month = aiMonthKey()) {
+  const list = await dbConnection.collection('platform_expenses').find({ month }).sort({ createdAt: -1 }).toArray();
+  return list.map((doc) => {
+    const row = withId(doc);
+    return {
+      id: row.id,
+      label: row.label || '',
+      amount: Number(row.amount) || 0,
+      note: row.note || '',
+      month: row.month,
+      createdAt: row.createdAt || null,
+    };
+  });
+}
+
+async function CreatePlatformExpense(data) {
+  const result = await dbConnection.collection('platform_expenses').insertOne(data);
+  return withId(await dbConnection.collection('platform_expenses').findOne({ _id: result.insertedId }));
+}
+
+async function DeletePlatformExpense(id) {
+  if (!ObjectId.isValid(id)) return false;
+  const result = await dbConnection.collection('platform_expenses').deleteOne({ _id: new ObjectId(id) });
+  return result.deletedCount > 0;
+}
+
+async function ListPlatformExpensesAll() {
+  const list = await dbConnection.collection('platform_expenses').find({}).toArray();
+  return list.map((doc) => ({
+    month: doc.month || '',
+    amount: Number(doc.amount) || 0,
+  }));
+}
+
+async function SavePlatformSnapshot(month, data) {
+  await dbConnection.collection('platform_snapshots').updateOne(
+    { month },
+    {
+      $set: { ...data, month, updatedAt: new Date() },
+      $setOnInsert: { createdAt: new Date() },
+    },
+    { upsert: true }
+  );
+}
+
+async function ListPlatformSnapshots() {
+  const list = await dbConnection.collection('platform_snapshots').find({}).toArray();
+  return list.map((doc) => ({
+    month: doc.month,
+    revenue: Number(doc.revenue) || 0,
+  }));
+}
+
 async function UpdateCashSession(id, data, tenantId) {
   const filter = oidFilter(id, tenantId);
   if (!filter) return null;
@@ -414,16 +601,77 @@ async function UpdateCashSession(id, data, tenantId) {
   return GetCashSessionById(id, tenantId);
 }
 
+let supportMailIndex = false;
+async function ensureSupportMailIndex() {
+  if (supportMailIndex) return;
+  await dbConnection.collection('support_mail').createIndex({ messageId: 1 }, { unique: true }).catch(() => {});
+  await dbConnection.collection('support_mail').createIndex({ tenantId: 1, at: -1 }).catch(() => {});
+  supportMailIndex = true;
+}
+
+async function SaveSupportMail(doc) {
+  await ensureSupportMailIndex();
+  const messageId = String(doc.messageId || '').trim();
+  if (!messageId) return null;
+  await dbConnection.collection('support_mail').updateOne(
+    { messageId },
+    { $setOnInsert: { ...doc, messageId, createdAt: new Date() } },
+    { upsert: true }
+  );
+  return dbConnection.collection('support_mail').findOne({ messageId });
+}
+
+async function ListSupportMail(tenantId) {
+  await ensureSupportMailIndex();
+  const rows = await dbConnection
+    .collection('support_mail')
+    .find({ tenantId: String(tenantId) })
+    .sort({ at: 1 })
+    .limit(80)
+    .toArray();
+  return rows.map(publicMail);
+}
+
+async function ListUnmatchedSupportMail() {
+  await ensureSupportMailIndex();
+  const rows = await dbConnection
+    .collection('support_mail')
+    .find({ tenantId: null, direction: 'in' })
+    .sort({ at: -1 })
+    .limit(30)
+    .toArray();
+  return rows.map(publicMail);
+}
+
+function publicMail(row) {
+  return {
+    id: String(row._id),
+    messageId: row.messageId,
+    tenantId: row.tenantId || null,
+    direction: row.direction,
+    from: row.from || '',
+    to: row.to || '',
+    subject: row.subject || '',
+    text: row.text || '',
+    at: row.at || row.createdAt || null,
+  };
+}
+
 module.exports = {
-  CreateTenant, GetTenantById, UpdateTenant, ListTenants, CountUsersByTenant, GetTenantByMpPreapprovalId,
+  CreateTenant, GetTenantById, UpdateTenant, ListTenants, CountUsersByTenant, ListUsersByTenant, GetTenantByMpPreapprovalId,
   CreateUser, FindUserByEmail, LoginUsuario, FindUserByUsername, UpdateUserById, FindUserByResetToken,
+  ListTenantAdminEmails,
   AddMesa, UpdateStatusMesa, Getmesas, GetMesaFreeWaiter, GetMesaById, DeleteMesa, CloseMesas, GetNextMesaNumero,
   AddWaiter, GetWaiters, GetWaiterByCellphone, GetWaiterByDisponibility, DeleteWaiter, UpdateWaiter,
   AddWaitList, GetWaitList, GetWaitListByNumber, DeleteWaitList,
   GetSettings, CreateSettings, UpdateSettings,
   GetMenus, GetMenuById, CreateMenu, UpdateMenu, DeleteMenu,
-  GetFoods, GetFoodById, GetFoodByBarcode, CreateFood, UpdateFood, DeleteFood,
-  GetOrders, GetOrderById, CreateOrder, UpdateOrder, GetOrdersByCashSession,
+  GetFoods, GetFoodById, GetFoodByBarcode, CreateFood, UpdateFood, DecrementFoodStock, IncrementFoodStock, DeleteFood,
+  GetOrders, GetOrderById, GetOrderByInvoiceToken, CreateOrder, UpdateOrder, GetOrdersByCashSession,
+  SaveSupportMail, ListSupportMail, ListUnmatchedSupportMail,
   GetInvites, GetInviteByToken, CreateInvite, UpdateInvite, DeleteInvite,
   GetOpenCashSession, GetCashSessionById, CreateCashSession, UpdateCashSession,
+  aiMonthKey, GetAiUsage, ReserveAiUse, RefundAiUse, ListAiUsage, ListAiUsageAll,
+  ListPlatformExpenses, ListPlatformExpensesAll, CreatePlatformExpense, DeletePlatformExpense,
+  SavePlatformSnapshot, ListPlatformSnapshots,
 };

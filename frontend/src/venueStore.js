@@ -13,6 +13,7 @@ const defaultSettings = {
   accentColor: "#E08A1E",
   timezone: "America/Mexico_City",
   initialTables: 0,
+  inventoryEnabled: false,
   setupCompleted: false,
 };
 
@@ -45,6 +46,7 @@ watch(
       accentColor: value.accentColor,
       timezone: value.timezone,
       initialTables: value.initialTables,
+      inventoryEnabled: Boolean(value.inventoryEnabled),
       setupCompleted: value.setupCompleted,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));

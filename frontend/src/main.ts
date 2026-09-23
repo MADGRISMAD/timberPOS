@@ -30,6 +30,7 @@ import ForgotPasswordView from "./views/ForgotPasswordView.vue";
 import ResetPasswordView from "./views/ResetPasswordView.vue";
 import PrintOrderView from "./views/PrintOrderView.vue";
 import PrintCashCloseView from "./views/PrintCashCloseView.vue";
+import InvoiceRequestView from "./views/InvoiceRequestView.vue";
 import BillingView from "./views/BillingView.vue";
 import PlatformAdminView from "./views/PlatformAdminView.vue";
 
@@ -46,6 +47,7 @@ const routes: RouteRecordRaw[] = [
   { path: "/forgot", name: "forgot", component: ForgotPasswordView },
   { path: "/reset/:token", name: "reset", component: ResetPasswordView },
   { path: "/invite/:token", name: "invite", component: InviteAcceptView },
+  { path: "/factura/:token", name: "factura", component: InvoiceRequestView },
   { path: "/setup", name: "setup", component: SetupWizard, meta: { requiresAuth: true } },
   { path: "/dashboard", name: "dashboard", component: DashboardView, meta: authMeta(["admin"]) },
   // POS abarrotes
@@ -70,7 +72,31 @@ const routes: RouteRecordRaw[] = [
     path: "/platform",
     name: "platform",
     component: PlatformAdminView,
-    meta: { requiresAuth: true, roles: ["platform_admin"] },
+    meta: { requiresAuth: true, roles: ["platform_admin"], owner: true },
+  },
+  {
+    path: "/platform/clientes",
+    name: "platformClients",
+    component: PlatformAdminView,
+    meta: { requiresAuth: true, roles: ["platform_admin"], owner: true },
+  },
+  {
+    path: "/platform/ganancias",
+    name: "platformRevenue",
+    component: PlatformAdminView,
+    meta: { requiresAuth: true, roles: ["platform_admin"], owner: true },
+  },
+  {
+    path: "/platform/ia",
+    name: "platformAi",
+    component: PlatformAdminView,
+    meta: { requiresAuth: true, roles: ["platform_admin"], owner: true },
+  },
+  {
+    path: "/platform/gastos",
+    name: "platformExpenses",
+    component: PlatformAdminView,
+    meta: { requiresAuth: true, roles: ["platform_admin"], owner: true },
   },
   {
     path: "/print/order/:id",
@@ -95,7 +121,7 @@ const router = createRouter({
   },
 });
 
-const publicNames = new Set(["landing", "login", "register", "forgot", "reset", "invite"]);
+const publicNames = new Set(["landing", "login", "register", "forgot", "reset", "invite", "factura"]);
 
 router.beforeEach(async (to) => {
   if (publicNames.has(String(to.name))) {
@@ -113,7 +139,7 @@ router.beforeEach(async (to) => {
     return { name: homeForRole() };
   }
 
-  if (to.name === "setup" || to.name === "billing" || to.name === "platform") {
+  if (to.name === "setup" || to.name === "billing" || to.matched.some((record) => record.meta.owner)) {
     return true;
   }
 

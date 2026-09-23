@@ -22,5 +22,12 @@ router.put(
   orders.updateStatus
 );
 router.put('/:id/pay', requireAuth, requireActiveSubscription, requireRoles('admin', 'cashier'), orders.pay);
+router.put('/:id/void', requireAuth, requireActiveSubscription, requireRoles('admin', 'cashier'), orders.voidSale);
+router.put(
+  '/:id/invoice',
+  requireAuth, requireActiveSubscription,
+  requireRoles('admin', 'cashier'),
+  orders.markInvoiceIssued
+);
 
 module.exports = router;

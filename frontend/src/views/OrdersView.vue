@@ -2,20 +2,12 @@
   <AppShell>
     <div class="orders-page">
       <!-- Estado de caja: franja compacta -->
-      <div class="cash-strip" :class="cashOpen ? 'is-open' : 'is-closed'">
-        <div class="cash-status">
-          <span class="dot" aria-hidden="true" />
-          <div class="cash-copy">
-            <strong>{{ cashOpen ? 'Caja abierta' : 'Caja cerrada' }}</strong>
-            <p v-if="cashOpen && session">
-              Fondo {{ money(session.openingFloat) }}
-              · Ventas {{ money(cashTotals.total) }}
-              · Efectivo {{ money((session.openingFloat || 0) + cashTotals.cash) }}
-            </p>
-            <p v-else>Ábrela para cobrar ventas del turno.</p>
+      <section class="caja-card" :class="cashOpen ? 'is-open' : 'is-closed'">
+        <div class="caja-head">
+          <div>
+            <p class="caja-kicker">{{ cashOpen ? 'Ya puedes cobrar' : 'Primero abre la caja' }}</p>
+            <h2>{{ cashOpen ? 'Caja abierta' : 'Caja cerrada' }}</h2>
           </div>
-        </div>
-        <div class="cash-btns">
           <button
             v-if="!cashOpen"
             type="button"
@@ -29,13 +21,24 @@
             @click="prepClose"
           >Cerrar turno</button>
         </div>
-      </div>
+        <div v-if="cashOpen" class="caja-nums">
+          <div>
+            <span>Vendiste</span>
+            <strong>{{ money(cashTotals.total) }}</strong>
+          </div>
+          <div>
+            <span>En efectivo</span>
+            <strong>{{ money(cashTotals.cash) }}</strong>
+          </div>
+          <div>
+            <span>Deberías tener</span>
+            <strong>{{ money(expectedCash) }}</strong>
+          </div>
+        </div>
+        <p v-else class="caja-wait">Cuando la abras, aquí verás cuánto vendiste y cuánto efectivo debería haber.</p>
+      </section>
       <p v-if="cashMsg" class="ok">{{ cashMsg }}</p>
       <p v-if="cashErr" class="err">{{ cashErr }}</p>
-
-      <div class="toolbar hide-mobile">
-        <p>Ventas y cobros de la tienda.</p>
-      </div>
 
       <div class="filters">
         <button
@@ -48,58 +51,91 @@
       </div>
 
       <div class="list">
-        <article v-for="o in filtered" :key="o.id" class="card">
-          <div class="head">
+        <article v-for="o in filtered" :key="o.id" class="sale">
+          <div class="sale-top">
             <div>
-              <h3>#{{ String(o.id || '').slice(-6).toUpperCase() }}</h3>
-              <p class="meta">
-                {{ formatDate(o.createdAt) }}
-                <span class="hide-mobile"> · {{ (o.items || []).length }} líneas</span>
-              </p>
+              <p class="sale-when">{{ formatDate(o.createdAt) }}</p>
+              <h3>{{ money(o.total) }}</h3>
             </div>
-            <div class="tags">
-              <span class="badge" :class="o.paymentStatus">{{ paymentText(o.paymentStatus) }}</span>
-              <span class="badge hide-mobile" :class="`st-${o.status}`">{{ statusText(o.status) }}</span>
-            </div>
+            <span class="badge" :class="saleTone(o)">{{ saleLabel(o) }}</span>
           </div>
-          <ul class="items hide-mobile">
-            <li v-for="(item, i) in (o.items || []).slice(0, 4)" :key="i">
-              {{ item.quantity }}× {{ item.name }} — {{ money(item.price * item.quantity) }}
+          <ul v-if="(o.items || []).length" class="items">
+            <li v-for="(item, i) in (o.items || []).slice(0, 3)" :key="i">
+              {{ item.quantity }} × {{ item.name }}
             </li>
-            <li v-if="(o.items || []).length > 4" class="more-items">
-              +{{ (o.items || []).length - 4 }} más
+            <li v-if="(o.items || []).length > 3" class="more-items">
+              y {{ (o.items || []).length - 3 }} más
             </li>
           </ul>
-          <div class="foot">
-            <strong>{{ money(o.total) }}</strong>
-            <div class="actions">
-              <router-link
-                class="link-btn hide-mobile"
-                :to="`/print/order/${o.id}?mode=receipt`"
-                target="_blank"
-              >Ticket</router-link>
-              <button
-                v-if="o.paymentStatus !== 'paid'"
-                type="button"
-                class="btn-primary"
-                :disabled="!cashOpen"
-                :title="cashOpen ? '' : 'Abre la caja primero'"
-                @click="openPay(o)"
-              >Cobrar</button>
-            </div>
+          <p v-if="o.invoice?.status === 'requested'" class="invoice-line">
+            Piden factura: {{ o.invoice.legalName }}
+          </p>
+          <div class="sale-actions">
+            <button
+              v-if="canCharge(o)"
+              type="button"
+              class="btn-primary"
+              @click="openPay(o)"
+            >Cobrar</button>
+            <button
+              v-if="canCancel(o)"
+              type="button"
+              class="btn-ghost"
+              @click="askVoid(o)"
+            >Cancelar</button>
+            <button
+              v-if="canReturn(o)"
+              type="button"
+              class="btn-ghost"
+              @click="askVoid(o)"
+            >Devolver</button>
+            <router-link
+              class="link-btn"
+              :to="`/print/order/${o.id}?mode=receipt`"
+              target="_blank"
+            >Ver ticket</router-link>
+            <button
+              v-if="o.invoice?.status === 'requested'"
+              type="button"
+              class="btn-ghost"
+              @click="markIssued(o)"
+            >Ya la facturé</button>
           </div>
         </article>
-        <p v-if="!filtered.length" class="empty">No hay pedidos en este filtro.</p>
+        <p v-if="!filtered.length" class="empty">No hay ventas en esta lista.</p>
       </div>
+
+      <!-- Cancelar o devolver -->
+      <Teleport to="body">
+        <div v-if="voidOrder" class="modal-bg" @click.self="voidOrder = null">
+          <div class="modal" role="dialog" aria-modal="true">
+            <h3>{{ voidOrder.paymentStatus === 'paid' ? 'Devolver venta' : 'Cancelar venta' }}</h3>
+            <p class="modal-hint">
+              <template v-if="voidOrder.paymentStatus === 'paid'">
+                Regresas {{ money(voidOrder.total) }} y los productos vuelven al inventario.
+              </template>
+              <template v-else>
+                Esta venta no se cobró. Solo se quita de la lista.
+              </template>
+            </p>
+            <div class="modal-actions">
+              <button type="button" @click="voidOrder = null">Volver</button>
+              <button type="button" class="btn-danger" :disabled="voidBusy" @click="confirmVoid">
+                {{ voidBusy ? 'Guardando…' : (voidOrder.paymentStatus === 'paid' ? 'Devolver' : 'Cancelar venta') }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Teleport>
 
       <!-- Abrir caja -->
       <Teleport to="body">
         <div v-if="showOpen" class="modal-bg" @click.self="showOpen = false">
           <form class="modal" role="dialog" aria-modal="true" @submit.prevent="openCash">
             <h3>Abrir caja</h3>
-            <p class="modal-hint">Indica el efectivo con el que inicia el turno.</p>
+            <p class="modal-hint">Escribe el efectivo con el que empieza el turno. Si no llevas cambio, pon 0.</p>
             <label>
-              Fondo inicial
+              Efectivo inicial
               <input
                 v-model.number="openingFloat"
                 type="number"
@@ -125,12 +161,12 @@
           <form class="modal" role="dialog" aria-modal="true" @submit.prevent="closeCash">
             <h3>Cerrar turno</h3>
             <div class="close-summary">
-              <div><span>Fondo</span><strong>{{ money(session?.openingFloat) }}</strong></div>
-              <div><span>Ventas</span><strong>{{ money(cashTotals.total) }}</strong></div>
-              <div><span>Efectivo esperado</span><strong>{{ money(expectedCash) }}</strong></div>
+              <div><span>Empezaste con</span><strong>{{ money(session?.openingFloat) }}</strong></div>
+              <div><span>Vendiste</span><strong>{{ money(cashTotals.total) }}</strong></div>
+              <div><span>Deberías tener en efectivo</span><strong>{{ money(expectedCash) }}</strong></div>
             </div>
             <label>
-              Efectivo contado en caja
+              ¿Cuánto efectivo contaste?
               <input
                 v-model.number="countedCash"
                 type="number"
@@ -157,7 +193,7 @@
       <Teleport to="body">
         <div v-if="payOrder" class="modal-bg" @click.self="payOrder = null">
           <div class="modal" role="dialog" aria-modal="true" aria-labelledby="pay-title">
-            <h3 id="pay-title">Cobrar</h3>
+            <h3 id="pay-title">Cobrar esta venta</h3>
             <div class="pay-sum">
               <div><span>Ticket</span><strong>{{ money(payOrder.total) }}</strong></div>
               <div v-if="payMethod === 'card' && cardExtraIva">
@@ -169,7 +205,7 @@
                 <strong>{{ money(payTotal) }}</strong>
               </div>
             </div>
-            <label>Método de pago
+            <label>¿Cómo pagó?
               <select v-model="payMethod">
                 <option value="cash">Efectivo</option>
                 <option value="card">Tarjeta</option>
@@ -183,7 +219,7 @@
             </label>
             <div class="modal-actions">
               <button type="button" @click="payOrder = null">Cancelar</button>
-              <button type="button" class="btn-primary" @click="confirmPay">Confirmar cobro</button>
+              <button type="button" class="btn-primary" @click="confirmPay">Cobrar</button>
             </div>
           </div>
         </div>
@@ -230,23 +266,34 @@ const cashMsg = ref("");
 const cashErr = ref("");
 const showOpen = ref(false);
 const showClose = ref(false);
+const voidOrder = ref(null);
+const voidBusy = ref(false);
 
 const filters = [
   { id: "open", label: "Abiertos" },
   { id: "unpaid", label: "Por cobrar" },
   { id: "paid", label: "Pagados" },
+  { id: "invoices", label: "Facturas" },
   { id: "all", label: "Todos" },
 ];
 
 const filtered = computed(() => {
   if (filter.value === "all") return orders.value;
   if (filter.value === "paid") return orders.value.filter((o) => o.paymentStatus === "paid");
-  if (filter.value === "unpaid") return orders.value.filter((o) => o.paymentStatus !== "paid");
-  return orders.value.filter((o) => o.paymentStatus !== "paid" && o.status !== "cancelled");
+  if (filter.value === "unpaid") {
+    return orders.value.filter((o) => o.paymentStatus === "unpaid" && o.status !== "cancelled");
+  }
+  if (filter.value === "invoices") {
+    return orders.value.filter((o) => o.invoice?.status === "requested" || o.invoice?.status === "issued");
+  }
+  return orders.value.filter((o) => o.paymentStatus === "unpaid" && o.status !== "cancelled");
 });
 
 const expectedCash = computed(
-  () => Number(session.value?.openingFloat || 0) + Number(cashTotals.value.cash || 0)
+  () =>
+    Number(session.value?.openingFloat || 0) +
+    Number(cashTotals.value.cash || 0) -
+    Number(session.value?.cashRefunds || 0)
 );
 const difference = computed(() => Number(countedCash.value || 0) - expectedCash.value);
 
@@ -262,6 +309,49 @@ function statusText(s) {
 }
 function paymentText(s) {
   return labelOf(paymentStatusLabel, s, "Sin pagar");
+}
+function canCharge(o) {
+  return o.paymentStatus === "unpaid" && o.status !== "cancelled";
+}
+function canCancel(o) {
+  return o.paymentStatus !== "paid" && o.paymentStatus !== "refunded" && o.status !== "cancelled";
+}
+function canReturn(o) {
+  return o.paymentStatus === "paid";
+}
+function saleLabel(o) {
+  if (o.paymentStatus === "refunded") return "Devuelta";
+  if (o.status === "cancelled") return "Cancelada";
+  return paymentText(o.paymentStatus);
+}
+function saleTone(o) {
+  if (o.paymentStatus === "refunded" || o.status === "cancelled") return "cancelled";
+  return o.paymentStatus;
+}
+function askVoid(order) {
+  cashErr.value = "";
+  voidOrder.value = order;
+}
+
+async function confirmVoid() {
+  if (!voidOrder.value || voidBusy.value) return;
+  voidBusy.value = true;
+  cashErr.value = "";
+  cashMsg.value = "";
+  const wasPaid = voidOrder.value.paymentStatus === "paid";
+  try {
+    const updated = await apiService.voidOrder(voidOrder.value.id);
+    const i = orders.value.findIndex((o) => o.id === updated.id);
+    if (i >= 0) orders.value[i] = updated;
+    voidOrder.value = null;
+    cashMsg.value = wasPaid ? "Venta devuelta." : "Venta cancelada.";
+    await loadCash();
+  } catch (e) {
+    cashErr.value = e.response?.data || "No se pudo cancelar la venta.";
+    voidOrder.value = null;
+  } finally {
+    voidBusy.value = false;
+  }
 }
 function modalityText(m) {
   return labelOf(modalityLabel, m);
@@ -325,6 +415,16 @@ async function closeCash() {
   }
 }
 
+async function markIssued(order) {
+  try {
+    const updated = await apiService.markInvoiceIssued(order.id);
+    const i = orders.value.findIndex((o) => o.id === order.id);
+    if (i >= 0) orders.value[i] = updated;
+  } catch (e) {
+    cashErr.value = e.response?.data || "No se pudo marcar la factura";
+  }
+}
+
 async function load() {
   try {
     orders.value = (await apiService.getOrders()) || [];
@@ -384,57 +484,67 @@ onMounted(load);
   animation: t-fade-up .45s ease both;
 }
 
-.cash-strip {
+.caja-card {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.9rem 0.95rem;
+  border-radius: 1rem;
+  border: 1px solid var(--timber-line);
+  background: var(--timber-panel);
+  margin-bottom: 0.65rem;
+  flex-shrink: 0;
+}
+.caja-card.is-closed {
+  border-color: color-mix(in srgb, var(--timber-warning) 40%, var(--timber-line));
+}
+.caja-card.is-open {
+  border-color: color-mix(in srgb, var(--timber-success) 40%, var(--timber-line));
+}
+.caja-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  flex-wrap: wrap;
-  padding: 0.55rem 0.75rem;
-  border-radius: 0.7rem;
-  border: 1px solid var(--timber-line);
-  background: var(--timber-panel);
-  margin-bottom: 0.45rem;
-  flex-shrink: 0;
 }
-.cash-strip.is-closed {
-  border-color: color-mix(in srgb, var(--timber-warning) 35%, var(--timber-line));
-}
-.cash-strip.is-open {
-  border-color: color-mix(in srgb, var(--timber-success) 35%, var(--timber-line));
-}
-.cash-status {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.7rem;
-  min-width: 0;
-}
-.dot {
-  width: 0.65rem;
-  height: 0.65rem;
-  border-radius: 50%;
-  margin-top: 0.4rem;
-  flex-shrink: 0;
-  background: var(--timber-warning);
-}
-.cash-strip.is-open .dot {
-  background: var(--timber-success);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--timber-success) 25%, transparent);
-}
-.cash-copy { min-width: 0; }
-.cash-copy strong {
-  display: block;
-  font-size: 0.95rem;
-  font-weight: 800;
-  letter-spacing: -0.01em;
-}
-.cash-copy p {
-  margin: 0.2rem 0 0;
-  font-size: 0.82rem;
+.caja-kicker {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
   color: var(--timber-muted);
-  line-height: 1.35;
 }
-.cash-btns { display: flex; gap: 0.5rem; flex-shrink: 0; }
+.caja-head h2 {
+  margin: 0.1rem 0 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.caja-wait {
+  margin: 0;
+  color: var(--timber-muted);
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+.caja-nums {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+.caja-nums div {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.55rem 0.6rem;
+  border-radius: 0.75rem;
+  background: var(--timber-surface);
+}
+.caja-nums span {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--timber-muted);
+}
+.caja-nums strong {
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+}
 
 .btn-ghost {
   min-height: 2.85rem;
@@ -464,11 +574,39 @@ onMounted(load);
   align-content: start;
   padding-bottom: 0.25rem;
 }
-.card { background:var(--timber-panel); border:1px solid var(--timber-line); border-radius:0.85rem; padding:0.85rem; box-shadow:var(--timber-shadow); color:var(--timber-ink); }
-.head { display:flex; justify-content:space-between; gap:1rem; align-items:flex-start; }
-.head h3 { margin:0; font-family:var(--font-display); font-size:1.2rem; font-weight:700; letter-spacing:-0.01em; }
-.meta { margin:.25rem 0 0; color:var(--timber-muted); font-size:.82rem; }
-.tags { display:flex; gap:.4rem; flex-wrap:wrap; justify-content:flex-end; }
+.sale {
+  background: var(--timber-panel);
+  border: 1px solid var(--timber-line);
+  border-radius: 0.95rem;
+  padding: 0.85rem;
+  display: grid;
+  gap: 0.65rem;
+}
+.sale-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+.sale-when {
+  margin: 0;
+  color: var(--timber-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.sale-top h3 {
+  margin: 0.1rem 0 0;
+  font-size: 1.45rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.sale-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+.sale-actions .btn-primary { min-height: 2.75rem; }
 .badge {
   display: inline-flex; align-items: center; justify-content: center;
   height: 1.7rem; padding: 0 0.75rem; border-radius: 999px;
@@ -482,10 +620,18 @@ onMounted(load);
 .badge.st-cancelled { background: var(--timber-danger-soft); color: var(--timber-danger); }
 .badge.paid { background: var(--timber-success-soft); color: var(--timber-success); }
 .badge.unpaid { background: var(--timber-warning-soft); color: var(--timber-warning); }
-.items { margin:.85rem 0; padding-left:1.1rem; color:var(--timber-muted); font-size:.9rem; }
-.foot { display:flex; justify-content:space-between; align-items:center; gap:1rem; }
-.actions { display:flex; gap:.45rem; flex-wrap:wrap; }
-.actions button:not(.btn-primary) { border:1px solid var(--timber-line); background:var(--timber-panel-elevated); color:var(--timber-ink); border-radius:.7rem; padding:.65rem .85rem; cursor:pointer; font-weight:700; min-height:2.85rem; }
+.badge.cancelled,
+.badge.refunded { background: var(--timber-danger-soft); color: var(--timber-danger); }
+.badge.invoice { background: var(--timber-primary-soft); color: var(--timber-primary); }
+.badge.issued { background: var(--timber-success-soft); color: var(--timber-success); }
+.invoice-line {
+  margin: 0.45rem 0 0;
+  font-size: 0.82rem;
+  color: var(--timber-muted);
+  font-weight: 600;
+}
+.items { margin: 0; padding-left: 1.1rem; color: var(--timber-ink); font-size: 0.92rem; font-weight: 700; }
+.more-items { color: var(--timber-muted); }
 .link-btn { display:inline-flex; align-items:center; border:1px solid var(--timber-line); background:var(--timber-panel-elevated); color:var(--timber-ink); border-radius:.7rem; padding:.65rem .85rem; font-weight:700; text-decoration:none; min-height:2.85rem; }
 .empty { color:var(--timber-muted); }
 .ok { color: var(--timber-success); font-size: .88rem; margin: 0 0 .75rem; font-weight: 600; }
@@ -640,10 +786,8 @@ onMounted(load);
 
 @media (max-width: 767.98px) {
   .orders-page { padding: 0.55rem; }
-  .cash-strip { padding: 0.5rem 0.65rem; }
-  .cash-copy p { display: none; }
-  .card { padding: 0.75rem; }
-  .foot { gap: 0.5rem; }
+  .caja-head { align-items: flex-start; }
+  .caja-nums { grid-template-columns: 1fr; }
   .filters button { min-height: 2.35rem; padding: 0.35rem 0.7rem; font-size: 0.78rem; }
 }
 

@@ -79,21 +79,29 @@
 
         <div class="rule dashed"></div>
         <p class="center thanks">¡Gracias por su compra!</p>
-        <p class="center legal">
-          Documento informativo. No es factura fiscal.
-          Solicite factura en caja si la requiere.
+        <div v-if="qrDataUrl" class="qr-block">
+          <img :src="qrDataUrl" alt="Código QR para facturar" class="qr" />
+          <p class="center thanks">Factura tú mismo</p>
+          <p class="center legal">
+            Escanea el QR y captura tu RFC.
+            No hace falta pedirlo en caja. Vigente el mes de la compra.
+          </p>
+        </div>
+        <p v-else class="center legal">
+          Documento informativo. Solicite factura en caja si la requiere.
         </p>
         <p class="center folio-bar">*{{ shortId(order.id) }}*</p>
-        <p class="center tiny">Timber POS</p>
+        <p class="center tiny brand-print"><span class="mi">Mi</span><span class="rest"> Tiendita</span></p>
       </template>
     </div>
   </div>
 </template>
 
 <script setup>
-import { onMounted, ref, computed } from "vue";
+import { onMounted, ref, computed, watch } from "vue";
 import { useRoute } from "vue-router";
-import { apiService } from "../apiService";
+import QRCode from "qrcode";
+import { apiService, appPublicOrigin } from "../apiService";
 import { venueStore, fetchVenueSettings } from "../venueStore";
 import { authStore } from "../authStore";
 import { lineBreakdown, TAX_RATE } from "../tax";
@@ -102,6 +110,7 @@ const route = useRoute();
 const order = ref(null);
 const loading = ref(true);
 const err = ref("");
+const qrDataUrl = ref("");
 
 const businessName = computed(() =>
   (venueStore.businessName || "TIENDA").toUpperCase()
@@ -163,10 +172,33 @@ function closeWin() {
   window.close();
 }
 
+async function paintQr(token) {
+  if (!token) {
+    qrDataUrl.value = "";
+    return;
+  }
+  const url = `${appPublicOrigin()}/factura/${token}`;
+  qrDataUrl.value = await QRCode.toDataURL(url, {
+    width: 280,
+    margin: 1,
+    errorCorrectionLevel: "M",
+  });
+}
+
+watch(
+  () => order.value?.invoiceToken,
+  (token) => {
+    paintQr(token).catch(() => {
+      qrDataUrl.value = "";
+    });
+  }
+);
+
 onMounted(async () => {
   try {
     await fetchVenueSettings().catch(() => {});
     order.value = await apiService.getOrdersById(String(route.params.id));
+    await paintQr(order.value?.invoiceToken);
     if (route.query.autoprint === "1") {
       setTimeout(() => window.print(), 400);
     }
@@ -307,6 +339,13 @@ onMounted(async () => {
   font-size: 12px;
   font-weight: 700;
 }
+.qr-block { margin: 4px 0 2px; }
+.qr {
+  display: block;
+  width: 32mm;
+  height: 32mm;
+  margin: 0 auto 4px;
+}
 .legal {
   margin: 0;
   font-size: 9px;
@@ -320,6 +359,9 @@ onMounted(async () => {
   font-weight: 700;
 }
 .tiny { margin: 2px 0 0; font-size: 9px; color: #666; }
+.brand-print { font-weight: 800; }
+.brand-print .mi { color: #e08a1e; }
+.brand-print .rest { color: #1e5aa8; }
 .err { color: #b42318; }
 p { margin: 0; }
 

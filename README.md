@@ -1,4 +1,4 @@
-# Timber POS — Abarrotes
+# Mi Tiendita — Abarrotes
 
 POS para **tiendas de abarrotes** y comercios de barrio. Multi-tenant, caja, catálogo e impresión de tickets.
 
@@ -26,7 +26,7 @@ Rutas antiguas de restaurante (`/main`, `/kitchen`, `/waitlist`) redirigen al PO
 ## Configuración inicial
 Tras registrarte, el wizard pide nombre de tienda, tipo (abarrotes / conveniencia / farmacia) y logo.
 
-## Billing (suscripción Timber)
+## Billing (suscripción Mi Tiendita)
 SaaS **100% nube** (sin instalar). **Básico** $150 · **Crecimiento** $399 · **Pro** $799 /mes. Incluyen **Inventario Mágico**. Ver `/billing`.
 
 ## Platform admin

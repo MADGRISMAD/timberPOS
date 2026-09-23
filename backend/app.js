@@ -21,10 +21,15 @@ app.use('/foods', require('./routers/foods.router'));
 app.use('/waiters', require('./routers/meseros.router'));
 app.use('/settings', require('./routers/settings.router'));
 app.use('/orders', require('./routers/orders.router'));
+app.use('/invoices', require('./routers/invoices.router'));
 app.use('/invites', require('./routers/invites.router'));
 app.use('/cash', require('./routers/cash.router'));
 app.use('/billing', require('./routers/billing.router'));
+app.use('/ai', require('./routers/ai.router'));
 app.use('/platform', require('./routers/platform.router'));
+
+const { verifyMailConfig } = require('./utils/mail.utils');
+verifyMailConfig().catch(() => {});
 
 server.listen(process.env.PORT, () => {
   console.log(`Server listening on port ${process.env.PORT}`);

@@ -5,7 +5,7 @@
         <p class="kicker">100% en la nube</p>
         <h1>Tu caja en celular, tablet o PC</h1>
         <p class="lede">
-          Sin instalar. Si se daña la PC, abres Timber en la tablet o el celular y sigues cobrando.
+          Sin instalar. Si se daña la PC, abres Mi Tiendita en la tablet o el celular y sigues cobrando.
           <InventarioMagicoTerm /> actualiza precios desde la nube — en segundos.
         </p>
       </header>
@@ -36,11 +36,35 @@
               Anual
             </button>
           </div>
+          <button
+            v-if="status.mpConfigured && status.mpPreapprovalId"
+            type="button"
+            class="sync-btn"
+            :disabled="busy"
+            @click="syncNow"
+          >
+            Sincronizar pago
+          </button>
         </div>
 
         <p v-if="interval === 'year'" class="year-tip">
           Anual Básico <strong>$1,500</strong> — pagas una vez y olvidas el cargo del mes.
         </p>
+
+        <label v-if="status.mpConfigured && status.mpSandbox" class="payer-box">
+          <span>Correo del comprador de prueba (Mercado Pago)</span>
+          <input
+            v-model="payerEmail"
+            type="email"
+            placeholder="el que te dio MP al crear el usuario Comprador"
+            autocomplete="off"
+          />
+          <small>
+            En sandbox no sirve tu Gmail real. Crea un usuario
+            <strong>Comprador</strong> en tu app →
+            <em>Cuentas de prueba</em> y pega aquí su correo.
+          </small>
+        </label>
 
         <div class="plans">
           <article
@@ -95,8 +119,17 @@
           </p>
         </section>
 
-        <p v-if="!status.mpConfigured" class="dev">
+        <p v-if="flash" class="flash" :class="{ ok: flashOk }">{{ flash }}</p>
+
+        <p v-if="status.mpConfigured && status.mpSandbox" class="dev sandbox">
+          Mercado Pago en <strong>modo prueba (sandbox)</strong>. Usa tarjetas de test de MP.
+        </p>
+        <p v-else-if="status.mpConfigured" class="dev live">
+          Mercado Pago conectado · cobros reales.
+        </p>
+        <p v-else class="dev">
           Modo desarrollo: al activar se simula el pago (sin Mercado Pago).
+          Configura <code>MP_ACCESS_TOKEN</code> en el backend para cobrar de verdad.
         </p>
       </template>
     </div>
@@ -115,6 +148,8 @@ const router = useRouter();
 const loading = ref(true);
 const busy = ref(false);
 const err = ref("");
+const flash = ref("");
+const flashOk = ref(true);
 const interval = ref(route.query.interval === "year" ? "year" : "month");
 const status = ref({
   plan: "basic",
@@ -122,8 +157,10 @@ const status = ref({
   trialDaysLeft: 14,
   active: true,
   mpConfigured: false,
+  mpSandbox: false,
 });
 const plans = ref([]);
+const payerEmail = ref("");
 
 const statusLabel = computed(() => {
   const map = {
@@ -170,6 +207,7 @@ async function load() {
     ]);
     status.value = s;
     plans.value = p.plans || [];
+    if (!payerEmail.value && s.mpPayerEmail) payerEmail.value = s.mpPayerEmail;
   } catch (e) {
     err.value = e.response?.data?.message || e.response?.data || "No se pudo cargar facturación";
   } finally {
@@ -179,18 +217,96 @@ async function load() {
 
 async function startCheckout(plan) {
   busy.value = true;
+  flash.value = "";
   try {
-    const res = await apiService.billingCheckout(plan, undefined, interval.value);
+    if (status.value.mpSandbox && !String(payerEmail.value || "").trim()) {
+      flashOk.value = false;
+      flash.value =
+        "En modo prueba indica el correo del usuario Comprador de Mercado Pago (Cuentas de prueba).";
+      busy.value = false;
+      return;
+    }
+    const res = await apiService.billingCheckout(
+      plan,
+      String(payerEmail.value || "").trim() || undefined,
+      interval.value
+    );
     if (res.mock || !status.value.mpConfigured) {
       await apiService.billingDevActivate(plan, res.preapprovalId, interval.value);
       await load();
+      flashOk.value = true;
+      flash.value = `Plan ${planName(plan)} activado (modo desarrollo).`;
       return;
     }
-    const url = res.init_point || res.sandbox_init_point;
-    if (url) window.location.href = url;
-    else alert("No se recibió link de Mercado Pago");
+    const url = status.value.mpSandbox
+      ? res.sandbox_init_point || res.init_point
+      : res.init_point || res.sandbox_init_point;
+    if (url) {
+      if (res.localReturn) {
+        flashOk.value = true;
+        flash.value =
+          "Se abrirá Mercado Pago. Al terminar, vuelve a esta pestaña y pulsa «Sincronizar pago».";
+      }
+      window.location.href = url;
+    } else alert("No se recibió link de Mercado Pago");
   } catch (e) {
-    alert(e.response?.data || "Error al iniciar pago");
+    const msg = e.response?.data || "Error al iniciar pago";
+    flashOk.value = false;
+    flash.value = String(msg);
+    if (String(msg).toLowerCase().includes("payer") || String(msg).toLowerCase().includes("collector")) {
+      flash.value =
+        "En sandbox el pagador debe ser un usuario de prueba de MP (no tu correo real). Crea un Comprador en Cuentas de prueba y usa ese email.";
+    }
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function handleReturnFromMp() {
+  flash.value = "Confirmando pago con Mercado Pago…";
+  flashOk.value = true;
+  try {
+    // Reintentos cortos: a veces MP tarda un segundo en autorizar
+    let last = null;
+    for (let i = 0; i < 4; i++) {
+      last = await apiService.billingSync();
+      if (last?.billingStatus === "active" || last?.active) break;
+      if (!last?.pending) break;
+      await new Promise((r) => setTimeout(r, 1200));
+    }
+    await load();
+    if (last?.active || status.value.active) {
+      flashOk.value = true;
+      flash.value = "Suscripción activada. ¡Listo para cobrar!";
+    } else if (last?.pending) {
+      flashOk.value = true;
+      flash.value =
+        "Pago pendiente en Mercado Pago. Si ya pagaste, espera un momento y recarga esta página.";
+    } else {
+      flashOk.value = true;
+      flash.value = "Volviste de Mercado Pago. Si el pago no se refleja, usa «Sincronizar pago».";
+    }
+  } catch (e) {
+    flashOk.value = false;
+    flash.value = e.response?.data || "No se pudo confirmar el pago todavía. Intenta sincronizar.";
+    await load();
+  }
+  router.replace({ path: "/billing" });
+}
+
+async function syncNow() {
+  busy.value = true;
+  flash.value = "";
+  try {
+    const last = await apiService.billingSync();
+    await load();
+    flashOk.value = Boolean(last?.active);
+    flash.value = last?.active
+      ? "Suscripción sincronizada y activa."
+      : `Estado MP: ${last?.mpStatus || "desconocido"}.`;
+  } catch (e) {
+    flashOk.value = false;
+    flash.value = e.response?.data || "No se pudo sincronizar";
   } finally {
     busy.value = false;
   }
@@ -203,10 +319,14 @@ onMounted(async () => {
       const iv = route.query.interval === "year" ? "year" : "month";
       await apiService.billingDevActivate(String(route.query.plan), undefined, iv);
       await load();
+      flashOk.value = true;
+      flash.value = "Plan activado (simulación).";
       router.replace({ path: "/billing" });
     } catch {
       /* ignore */
     }
+  } else if (route.query.mp === "return") {
+    await handleReturnFromMp();
   }
 });
 </script>
@@ -312,6 +432,32 @@ onMounted(async () => {
   color: var(--timber-muted);
 }
 .year-tip strong { color: var(--timber-ink); }
+.payer-box {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.85rem 1rem;
+  border-radius: 0.9rem;
+  background: var(--timber-panel);
+  border: 1px solid var(--timber-line);
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--timber-muted);
+}
+.payer-box input {
+  min-height: 2.6rem;
+  border-radius: 0.65rem;
+  border: 1px solid var(--timber-line);
+  padding: 0.55rem 0.75rem;
+  font: inherit;
+  font-weight: 600;
+  color: var(--timber-ink);
+  background: var(--timber-panel-elevated);
+}
+.payer-box small {
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--timber-muted);
+}
 
 .plans {
   display: grid;
@@ -468,6 +614,46 @@ onMounted(async () => {
   color: var(--timber-muted);
   text-align: center;
 }
+.dev.sandbox {
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.65rem;
+  background: var(--timber-warning-soft);
+  color: var(--timber-warning);
+}
+.dev.live {
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.65rem;
+  background: var(--timber-success-soft);
+  color: var(--timber-success);
+}
+.dev code {
+  font-size: 0.85em;
+}
+.flash {
+  margin: 0;
+  padding: 0.7rem 0.85rem;
+  border-radius: 0.7rem;
+  background: var(--timber-warning-soft);
+  color: var(--timber-warning);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+.flash.ok {
+  background: var(--timber-success-soft);
+  color: var(--timber-success);
+}
+.sync-btn {
+  border: 1px solid var(--timber-line);
+  background: var(--timber-panel);
+  color: var(--timber-ink);
+  border-radius: 999px;
+  min-height: 2.35rem;
+  padding: 0 1rem;
+  font-weight: 700;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+.sync-btn:disabled { opacity: 0.6; }
 
 .extras {
   display: grid;
