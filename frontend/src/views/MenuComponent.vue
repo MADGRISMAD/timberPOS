@@ -235,7 +235,11 @@
               class="inp"
               placeholder="Código de barras"
               autocomplete="off"
+              autocorrect="off"
+              autocapitalize="off"
+              spellcheck="false"
               autofocus
+              @keydown.enter.prevent="runPriceCheck"
             />
             <div v-if="priceResult" class="price-card">
               <strong>{{ priceResult.name }}</strong>
@@ -248,6 +252,20 @@
             <button type="submit" class="act primary">Consultar</button>
             <button type="button" class="act" @click="closePriceCheck">Cerrar</button>
           </form>
+        </div>
+      </Teleport>
+
+      <Teleport to="body">
+        <div v-if="missingCode" class="sheet-bg" @click.self="dismissMissing">
+          <div class="sheet" role="dialog" aria-labelledby="missing-title">
+            <h3 id="missing-title">No está en el catálogo</h3>
+            <p class="sheet-hint">
+              El código <strong>{{ missingCode }}</strong> no existe.
+              Agrégalo para poder venderlo.
+            </p>
+            <button type="button" class="act primary" @click="startAddMissing">Agregar producto</button>
+            <button type="button" class="act" @click="dismissMissing">Ahora no</button>
+          </div>
         </div>
       </Teleport>
 
@@ -267,13 +285,13 @@
       </Teleport>
 
       <Teleport to="body">
-        <div v-if="showMenuForm" class="sheet-bg" @click.self="showMenuForm = false">
+        <div v-if="showMenuForm" class="sheet-bg" @click.self="cancelMenuForm">
           <form class="sheet" @submit.prevent="createMenu">
             <h3>Nueva categoría</h3>
             <input v-model="menuForm.name" class="inp" placeholder="Nombre" required />
             <input v-model="menuForm.description" class="inp" placeholder="Descripción" />
             <button type="submit" class="act primary">Crear</button>
-            <button type="button" class="act" @click="showMenuForm = false">Cancelar</button>
+            <button type="button" class="act" @click="cancelMenuForm">Cancelar</button>
           </form>
         </div>
       </Teleport>
@@ -325,7 +343,7 @@
               </label>
               <label v-else class="field">
                 <span>Código de barras</span>
-                <input v-model="foodForm.barcode" class="inp" placeholder="Escanea o escribe" autocomplete="off" />
+                <input v-model="foodForm.barcode" class="inp" placeholder="Escanea o escribe" autocomplete="off" data-scan="barcode" />
               </label>
 
               <div class="iva-choice wide">
@@ -349,12 +367,13 @@
 
               <label v-if="inventoryOn" class="field">
                 <span>Código de barras</span>
-                <input v-model="foodForm.barcode" class="inp" placeholder="Escanea o escribe" autocomplete="off" />
+                <input v-model="foodForm.barcode" class="inp" placeholder="Escanea o escribe" autocomplete="off" data-scan="barcode" />
               </label>
               <label class="field" :class="{ wide: !inventoryOn }">
                 <span>Descripción</span>
                 <input v-model="foodForm.description" class="inp" placeholder="Opcional" />
               </label>
+              <p v-if="foodError" class="scan-msg err wide">{{ foodError }}</p>
             </div>
 
             <footer class="product-foot" :class="{ editing: editingFood }">
@@ -417,6 +436,12 @@ export default {
     const priceCode = ref("");
     const priceResult = ref(null);
     const priceErr = ref("");
+    const missingCode = ref("");
+    const missingIntent = ref("sale");
+    const addAfterSave = ref(false);
+    const pendingIntent = ref("sale");
+    const pendingBarcode = ref("");
+    const foodError = ref("");
 
     const showMenuForm = ref(false);
     const showFoodForm = ref(false);
@@ -437,6 +462,15 @@ export default {
 
     let flashTimer = null;
     let searchTimer = null;
+    let priceTimer = null;
+    let wedgeBuf = "";
+    let wedgeLast = 0;
+    let wedgeTimer = null;
+    let wedgeArmed = false;
+    let lastSaleCode = "";
+    let lastSaleAt = 0;
+    let lastPriceCode = "";
+    let lastPriceAt = 0;
 
     const businessName = computed(() => venueStore.businessName || "Tienda");
     const lines = computed(() => store.platillosSeleccionados);
@@ -534,10 +568,74 @@ export default {
 
     function focusScan() {
       nextTick(() => {
-        if (mode.value === "pos" && !showPriceCheck.value && !showDiscount.value && scanInput.value) {
+        const blocked =
+          showPriceCheck.value ||
+          showDiscount.value ||
+          showFoodForm.value ||
+          showMenuForm.value ||
+          showMagic.value ||
+          missingCode.value;
+        if (mode.value === "pos" && !blocked && scanInput.value) {
           scanInput.value.focus();
         }
       });
+    }
+
+    function isCodeQuery(value) {
+      return /^\d{6,}$/.test(String(value || "").trim());
+    }
+
+    function isScannerPayload(value) {
+      const text = String(value || "").trim();
+      if (/^\d{4,}$/.test(text)) return true;
+      const digits = (text.match(/\d/g) || []).length;
+      return text.length >= 8 && digits >= 4 && /^[0-9A-Za-z-]+$/.test(text);
+    }
+
+    let muteScanWatchUntil = 0;
+
+    function clearScanField() {
+      muteScanWatchUntil = Date.now() + 400;
+      scanCode.value = "";
+      if (scanInput.value) scanInput.value.value = "";
+    }
+
+    function askToAdd(code, intent) {
+      missingCode.value = code;
+      missingIntent.value = intent;
+      scanError.value = "";
+      if (intent === "price") {
+        priceErr.value = "Producto no encontrado";
+        priceCode.value = "";
+        if (priceInput.value) priceInput.value.value = "";
+        lastPriceCode = "";
+      }
+    }
+
+    function dismissMissing() {
+      missingCode.value = "";
+      focusScan();
+    }
+
+    function startAddMissing() {
+      const code = missingCode.value;
+      const intent = missingIntent.value;
+      missingCode.value = "";
+      openNewFood();
+      addAfterSave.value = true;
+      pendingIntent.value = intent;
+      pendingBarcode.value = code;
+      nextTick(() => {
+        foodForm.barcode = code;
+      });
+    }
+
+    function cancelMenuForm() {
+      showMenuForm.value = false;
+      if (!showFoodForm.value) {
+        pendingBarcode.value = "";
+        addAfterSave.value = false;
+      }
     }
 
     function goMode(next) {
@@ -570,12 +668,25 @@ export default {
       focusScan();
     }
 
-    async function onScanEnter() {
-      const code = scanCode.value.trim();
-      if (!code || scanning.value) return;
+    let queuedCode = "";
+
+    async function applyScannedCode(raw) {
+      const code = String(raw || "").trim();
+      if (!code || mode.value !== "pos") return;
+      if (showFoodForm.value || showMenuForm.value || showDiscount.value || showMagic.value) return;
+      if (code === lastSaleCode && Date.now() - lastSaleAt < 450) return;
+      if (scanning.value) {
+        queuedCode = code;
+        return;
+      }
+      lastSaleCode = code;
+      lastSaleAt = Date.now();
+      missingCode.value = "";
       scanning.value = true;
       scanError.value = "";
       nameHits.value = [];
+      const asCode = isCodeQuery(code) || isScannerPayload(code);
+      if (asCode) clearScanField();
       try {
         const res = await apiService.lookupFood(code);
         if (res && res.id) {
@@ -588,32 +699,53 @@ export default {
           return;
         }
         if (matches.length > 1) {
+          scanCode.value = code;
           nameHits.value = matches;
           scanError.value = `${matches.length} coincidencias — elige una`;
           return;
         }
-        scanError.value = `No encontrado: ${code}`;
-        scanCode.value = "";
-        focusScan();
+        clearScanField();
+        askToAdd(code, "sale");
       } catch {
         scanError.value = "Error al buscar producto";
-        focusScan();
+        lastSaleCode = "";
       } finally {
         scanning.value = false;
+        const next = queuedCode;
+        queuedCode = "";
+        if (next && next !== code) applyScannedCode(next);
+        else if (!missingCode.value && !nameHits.value.length) focusScan();
       }
     }
 
+    function onScanEnter() {
+      const typed = String(scanInput.value?.value || scanCode.value || "").trim();
+      scanCode.value = typed;
+      applyScannedCode(typed);
+    }
+
     watch(scanCode, (val) => {
+      if (Date.now() < muteScanWatchUntil) return;
       clearTimeout(searchTimer);
       const q = String(val || "").trim();
-      if (q.length < 2 || mode.value !== "pos") {
+      if (!q || mode.value !== "pos") {
         if (!q) nameHits.value = [];
         return;
       }
-      if (/^[0-9]{6,}$/.test(q)) return;
+      if (isCodeQuery(q)) {
+        searchTimer = setTimeout(() => {
+          if (String(scanCode.value || "").trim() !== q) return;
+          if (nameHits.value.length && lastSaleCode === q) return;
+          applyScannedCode(q);
+        }, 280);
+        return;
+      }
+      if (q.length < 2) return;
       searchTimer = setTimeout(async () => {
+        if (String(scanCode.value || "").trim() !== q) return;
         try {
           const res = await apiService.lookupFood(q);
+          if (String(scanCode.value || "").trim() !== q) return;
           if (res?.id) nameHits.value = [res];
           else nameHits.value = Array.isArray(res?.matches) ? res.matches : [];
         } catch {
@@ -673,8 +805,13 @@ export default {
     }
 
     async function runPriceCheck() {
-      const code = priceCode.value.trim();
+      const dom = priceInput.value && document.activeElement === priceInput.value ? priceInput.value.value : "";
+      const code = String(dom || priceCode.value || "").trim();
       if (!code) return;
+      if (code === lastPriceCode && Date.now() - lastPriceAt < 500) return;
+      lastPriceCode = code;
+      lastPriceAt = Date.now();
+      priceCode.value = code;
       priceErr.value = "";
       priceResult.value = null;
       try {
@@ -682,11 +819,22 @@ export default {
         if (res?.id) priceResult.value = res;
         else if (res?.matches?.length === 1) priceResult.value = res.matches[0];
         else if (res?.matches?.length > 1) priceErr.value = "Varias coincidencias — sé más específico";
-        else priceErr.value = "Producto no encontrado";
+        else askToAdd(code, "price");
       } catch {
         priceErr.value = "Error al consultar";
+        lastPriceCode = "";
       }
     }
+
+    watch(priceCode, (val) => {
+      clearTimeout(priceTimer);
+      const q = String(val || "").trim();
+      if (!showPriceCheck.value || !isCodeQuery(q)) return;
+      priceTimer = setTimeout(() => {
+        if (String(priceCode.value || "").trim() !== q) return;
+        runPriceCheck();
+      }, 280);
+    });
 
     async function finalizeOrder() {
       if (!lines.value.length || sending.value) return;
@@ -717,7 +865,102 @@ export default {
       }
     }
 
+    function resetWedge() {
+      clearTimeout(wedgeTimer);
+      wedgeBuf = "";
+      wedgeArmed = false;
+    }
+
+    function fieldOf(el) {
+      if (!el || !el.tagName) return "";
+      if (el === scanInput.value) return "scan";
+      if (el === priceInput.value) return "price";
+      if (el.dataset && el.dataset.scan === "barcode") return "barcode";
+      const tag = el.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable) return "other";
+      return "";
+    }
+
+    function commitWedge(code) {
+      const clean = String(code || "").trim();
+      resetWedge();
+      if (!isScannerPayload(clean)) return;
+      if (showFoodForm.value || fieldOf(document.activeElement) === "barcode") {
+        foodForm.barcode = clean;
+        return;
+      }
+      if (showMenuForm.value || showDiscount.value || showMagic.value) return;
+      if (showPriceCheck.value) {
+        priceCode.value = clean;
+        if (priceInput.value) priceInput.value.value = clean;
+        runPriceCheck();
+        return;
+      }
+      clearScanField();
+      applyScannedCode(clean);
+    }
+
+    function captureWedge(e) {
+      if (mode.value !== "pos") return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === "Escape") {
+        resetWedge();
+        return;
+      }
+
+      const field = fieldOf(e.target);
+      if (e.key === "Enter" || e.key === "NumpadEnter" || e.key === "Tab") {
+        const code = wedgeBuf.trim();
+        const wasScan = wedgeArmed && isScannerPayload(code);
+        if (wasScan) {
+          e.preventDefault();
+          e.stopPropagation();
+          commitWedge(code);
+          return;
+        }
+        resetWedge();
+        if (e.key === "Tab") return;
+        if (field === "scan") {
+          e.preventDefault();
+          const typed = String(scanInput.value?.value || scanCode.value || "").trim();
+          applyScannedCode(typed);
+          return;
+        }
+        if (field === "price") {
+          e.preventDefault();
+          const typed = String(priceInput.value?.value || priceCode.value || "").trim();
+          priceCode.value = typed;
+          runPriceCheck();
+        }
+        return;
+      }
+
+      if (e.key.length !== 1) return;
+
+      const now = performance.now();
+      const gap = wedgeLast ? now - wedgeLast : 999;
+      wedgeLast = now;
+      if (gap > 40) {
+        wedgeBuf = "";
+        wedgeArmed = false;
+      }
+      wedgeBuf += e.key;
+      if (gap <= 40 && wedgeBuf.length >= 2) wedgeArmed = true;
+      if (wedgeArmed && field === "other") e.preventDefault();
+
+      clearTimeout(wedgeTimer);
+      wedgeTimer = setTimeout(() => {
+        if (wedgeArmed && isScannerPayload(wedgeBuf)) commitWedge(wedgeBuf);
+        else {
+          wedgeBuf = "";
+          wedgeArmed = false;
+        }
+      }, 50);
+    }
+
     function onHotkey(e) {
+      captureWedge(e);
+      if (e.defaultPrevented) return;
       if (mode.value !== "pos") return;
       const tag = (e.target && e.target.tagName) || "";
       const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
@@ -776,6 +1019,15 @@ export default {
       menuForm.name = "";
       menuForm.description = "";
       showMenuForm.value = false;
+      selectedMenuId.value = created.id;
+      if (pendingBarcode.value) {
+        showFoodForm.value = true;
+        const code = pendingBarcode.value;
+        nextTick(() => {
+          foodForm.barcode = code;
+        });
+        return;
+      }
       loadMenuProducts(created.id);
     }
 
@@ -823,9 +1075,16 @@ export default {
       foodForm.barcode = "";
       foodForm.priceMode = "gross";
       foodForm.stock = 0;
+      foodError.value = "";
+      addAfterSave.value = false;
+      pendingBarcode.value = "";
+      pendingIntent.value = "sale";
     }
 
     async function createFood() {
+      foodError.value = "";
+      const shouldAdd = addAfterSave.value;
+      const intent = pendingIntent.value;
       const payload = {
         name: foodForm.name,
         price: foodForm.price,
@@ -837,14 +1096,36 @@ export default {
         menuId: selectedMenuId.value,
         stock: inventoryOn.value ? Number(foodForm.stock) || 0 : Number(foodForm.stock) || 0,
       };
-      if (editingFood.value) {
-        const updated = await apiService.editFood(editingFood.value.id, payload);
-        const idx = productos.value.findIndex((p) => p.id === updated.id);
-        if (idx >= 0) productos.value[idx] = updated;
-      } else {
-        productos.value.push(await apiService.createFood(payload));
+      try {
+        let saved;
+        if (editingFood.value) {
+          saved = await apiService.editFood(editingFood.value.id, payload);
+          const idx = productos.value.findIndex((p) => p.id === saved.id);
+          if (idx >= 0) productos.value[idx] = saved;
+        } else {
+          saved = await apiService.createFood(payload);
+          productos.value.push(saved);
+        }
+        closeFoodForm();
+        if (shouldAdd && saved?.id) {
+          if (intent === "price") {
+            showPriceCheck.value = true;
+            priceErr.value = "";
+            priceResult.value = saved;
+            priceCode.value = saved.barcode || saved.sku || "";
+            lastPriceCode = priceCode.value;
+            lastPriceAt = Date.now();
+          } else {
+            addProduct(saved);
+          }
+        }
+      } catch (error) {
+        const status = error.response?.status;
+        const data = error.response?.data;
+        foodError.value = status === 403
+          ? "No tienes permiso para agregar productos. Pide a un administrador que lo registre."
+          : (typeof data === "string" && data ? data : "No se pudo guardar el producto");
       }
-      closeFoodForm();
     }
 
     async function deleteFood() {
@@ -881,6 +1162,8 @@ export default {
       window.removeEventListener("focus", focusScan);
       clearTimeout(flashTimer);
       clearTimeout(searchTimer);
+      clearTimeout(priceTimer);
+      clearTimeout(wedgeTimer);
     });
 
     return {
@@ -913,6 +1196,11 @@ export default {
       priceCode,
       priceResult,
       priceErr,
+      missingCode,
+      foodError,
+      dismissMissing,
+      startAddMissing,
+      cancelMenuForm,
       showMenuForm,
       showFoodForm,
       showMagic,
