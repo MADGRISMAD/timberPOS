@@ -310,7 +310,7 @@ export const apiService = {
   platformClientMail(id: string) {
     return axios.get(`/platform/tenants/${id}/mail`).then((r) => r.data);
   },
-  platformSendClientMail(id: string, payload: { to?: string; subject: string; message: string }) {
+  platformSendClientMail(id: string, payload: { to?: string; subject?: string; message: string; ticketId?: string }) {
     return axios.post(`/platform/tenants/${id}/mail`, payload).then((r) => r.data);
   },
   platformInbox() {

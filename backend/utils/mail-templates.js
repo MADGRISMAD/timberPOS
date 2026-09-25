@@ -247,32 +247,6 @@ function reportRows(rows, empty) {
     .join('');
 }
 
-function cloudSvg(cloud) {
-  const points = cloud || [];
-  const width = 700;
-  const height = 118;
-  const left = 28;
-  const right = 16;
-  const top = 10;
-  const bottom = 92;
-  const maxX = Math.max(1, ...points.map((point) => Number(point.uses) || 0));
-  const maxY = Math.max(1, ...points.map((point) => Number(point.revenue) || 0));
-  const xOf = (uses) => left + ((Number(uses) || 0) / maxX) * (width - left - right);
-  const yOf = (revenue) => bottom - ((Number(revenue) || 0) / maxY) * (bottom - top);
-  const dots = points
-    .map((point, index) => {
-      const bump = ((index % 5) - 2) * 2;
-      const x = Math.min(width - 8, Math.max(left, xOf(point.uses) + bump));
-      return `<circle cx="${x.toFixed(1)}" cy="${yOf(point.revenue).toFixed(1)}" r="5" fill="${BRAND.primary}" />`;
-    })
-    .join('');
-  const axis = `<line x1="${left}" y1="${bottom}" x2="${width - right}" y2="${bottom}" stroke="${BRAND.line}" />
-    <line x1="${left}" y1="${top}" x2="${left}" y2="${bottom}" stroke="${BRAND.line}" />
-    <text x="${left}" y="110" font-size="10" fill="${BRAND.muted}" font-family="Segoe UI,Helvetica,Arial,sans-serif">0 usos</text>
-    <text x="${width - right}" y="110" text-anchor="end" font-size="10" fill="${BRAND.muted}" font-family="Segoe UI,Helvetica,Arial,sans-serif">${maxX} usos</text>`;
-  return `<svg viewBox="0 0 ${width} ${height}" width="100%" height="96" role="img" aria-label="Dispersión de clientes del mes">${axis}${dots}</svg>`;
-}
-
 function ownerMonthlyReport(books) {
   const [year, month] = String(books.month || '').split('-').map(Number);
   const titleDate = new Date(Date.UTC(year || 2026, (month || 1) - 1, 1));
@@ -330,9 +304,6 @@ function ownerMonthlyReport(books) {
             .join('')}
         </tr>
       </table>
-      <div style="font-size:11px;font-weight:800;margin:2px 0 2px">Clientes de este mes</div>
-      ${cloudSvg(books.cloud || [])}
-      <div style="font-size:10px;color:${BRAND.muted};margin-top:-2px">Cada punto es un cliente. Horizontal: usos de IA. Vertical: lo que paga.</div>
       <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px">
         <tr>
           <td width="48%" valign="top" style="padding-right:12px">

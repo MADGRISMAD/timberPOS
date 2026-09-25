@@ -19,45 +19,68 @@
               <p class="kpi-label">Ganancia del mes</p>
               <p class="kpi-value">{{ money(books.profit) }}</p>
               <p class="kpi-sub">ingresos menos IA y gastos</p>
+              <svg class="spark in" viewBox="0 0 160 48" role="img" aria-label="Ganancia del mes">
+                <path :d="linePath(spark.profit)" />
+                <circle v-for="point in spark.profit" :key="'g' + point.day" :cx="point.x" :cy="point.y" r="2.4">
+                  <title>Día {{ point.day }} · {{ money(point.value) }}</title>
+                </circle>
+              </svg>
             </div>
             <div class="kpi">
               <p class="kpi-label">Ingresos</p>
               <p class="kpi-value">{{ money(books.revenue) }}</p>
               <p class="kpi-sub">{{ books.clients.active }} planes activos</p>
+              <svg class="spark in" viewBox="0 0 160 48" role="img" aria-label="Ingresos del mes">
+                <path :d="linePath(spark.revenue)" />
+                <circle v-for="point in spark.revenue" :key="'i' + point.day" :cx="point.x" :cy="point.y" r="2.4">
+                  <title>Día {{ point.day }} · {{ money(point.value) }}</title>
+                </circle>
+              </svg>
             </div>
             <div class="kpi">
               <p class="kpi-label">Gasto de IA</p>
               <p class="kpi-value">{{ money(books.ai.cost) }}</p>
               <p class="kpi-sub">{{ books.ai.uses }} usos</p>
+              <svg class="spark ai" viewBox="0 0 160 48" role="img" aria-label="Gasto de IA del mes">
+                <path :d="linePath(spark.ai)" />
+                <circle v-for="point in spark.ai" :key="'a' + point.day" :cx="point.x" :cy="point.y" r="2.4">
+                  <title>Día {{ point.day }} · {{ money(point.value) }}</title>
+                </circle>
+              </svg>
             </div>
             <div class="kpi">
               <p class="kpi-label">Otros gastos</p>
               <p class="kpi-value">{{ money(books.expensesTotal) }}</p>
               <p class="kpi-sub">{{ books.expenses.length }} anotados</p>
+              <svg class="spark out" viewBox="0 0 160 48" role="img" aria-label="Otros gastos del mes">
+                <path :d="linePath(spark.spent)" />
+                <circle v-for="point in spark.spent" :key="'e' + point.day" :cx="point.x" :cy="point.y" r="2.4">
+                  <title>Día {{ point.day }} · {{ money(point.value) }}</title>
+                </circle>
+              </svg>
             </div>
           </div>
 
           <section v-if="route.name === 'platform'" class="t-card panel">
             <div class="panel-head">
-              <h3>Este mes</h3>
-              <p class="pay-meta">Cada punto es un cliente. Horizontal: usos de IA. Vertical: lo que paga.</p>
+              <h3>Correos nuevos</h3>
+              <span v-if="waitingClients.length" class="wait-badge">{{ waitingClients.length }}</span>
             </div>
-            <svg class="scatter" viewBox="0 0 640 200" role="img" aria-label="Dispersión de clientes del mes">
-              <line class="axis" x1="28" y1="168" x2="624" y2="168" />
-              <line class="axis" x1="28" y1="16" x2="28" y2="168" />
-              <circle
-                v-for="(point, index) in books.cloud || []"
-                :key="point.id"
-                class="dot in"
-                :cx="cloudX(point.uses, index)"
-                :cy="valueY(point.revenue, cloudMax)"
-                r="6"
+            <p v-if="books.inboxError" class="err">{{ books.inboxError }}</p>
+            <p v-else-if="!waitingClients.length" class="muted">No hay correos por responder.</p>
+            <div v-else class="waiting-list">
+              <button
+                v-for="item in waitingClients"
+                :key="item.tenantId"
+                type="button"
+                class="waiting"
+                @click="goToWaiting(item)"
               >
-                <title>{{ point.businessName }} · {{ point.uses }} usos · {{ money(point.revenue) }}</title>
-              </circle>
-              <text class="tick" x="28" y="190">0 usos</text>
-              <text class="tick" x="624" y="190" text-anchor="end">{{ cloudUsesMax }} usos</text>
-            </svg>
+                <strong>{{ item.businessName }}</strong>
+                <span>Hay {{ item.count === 1 ? '1 correo nuevo' : item.count + ' correos nuevos' }}</span>
+                <span class="wait-badge">{{ item.count }}</span>
+              </button>
+            </div>
           </section>
 
           <div v-if="route.name === 'platform'" class="mid">
@@ -99,28 +122,6 @@
               </div>
             </div>
             <section class="t-card panel">
-              <div class="panel-head">
-                <h3>Este mes</h3>
-                <p class="pay-meta">Cada punto es un cliente. Horizontal: usos de IA. Vertical: lo que paga.</p>
-              </div>
-              <svg class="scatter" viewBox="0 0 640 200" role="img" aria-label="Dispersión de clientes">
-                <line class="axis" x1="28" y1="168" x2="624" y2="168" />
-                <line class="axis" x1="28" y1="16" x2="28" y2="168" />
-                <circle
-                  v-for="(point, index) in books.cloud || []"
-                  :key="point.id"
-                  class="dot in"
-                  :cx="cloudX(point.uses, index)"
-                  :cy="valueY(point.revenue, cloudMax)"
-                  r="6"
-                >
-                  <title>{{ point.businessName }} · {{ point.uses }} usos · {{ money(point.revenue) }}</title>
-                </circle>
-                <text class="tick" x="28" y="190">0 usos</text>
-                <text class="tick" x="624" y="190" text-anchor="end">{{ cloudUsesMax }} usos</text>
-              </svg>
-            </section>
-            <section class="t-card panel">
               <div class="panel-head"><h3>Quién está pagando</h3></div>
               <p v-if="!books.payers.length" class="muted">Todavía no hay planes activos.</p>
               <table v-else class="sheet">
@@ -154,28 +155,6 @@
               </div>
             </div>
             <section class="t-card panel">
-              <div class="panel-head">
-                <h3>Uso contra el cupo</h3>
-                <p class="pay-meta">Cada punto es un cliente de este mes. Horizontal: usos. Vertical: cupo del plan.</p>
-              </div>
-              <svg class="scatter" viewBox="0 0 640 200" role="img" aria-label="Dispersión de usos contra el cupo">
-                <line class="axis" x1="28" y1="168" x2="624" y2="168" />
-                <line class="axis" x1="28" y1="16" x2="28" y2="168" />
-                <circle
-                  v-for="(point, index) in books.cloud || []"
-                  :key="point.id"
-                  class="dot ai"
-                  :cx="cloudX(point.uses, index)"
-                  :cy="valueY(point.limit, limitMax)"
-                  r="6"
-                >
-                  <title>{{ point.businessName }} · {{ point.uses }} de {{ point.limit }}</title>
-                </circle>
-                <text class="tick" x="28" y="190">0 usos</text>
-                <text class="tick" x="624" y="190" text-anchor="end">{{ cloudUsesMax }} usos</text>
-              </svg>
-            </section>
-            <section class="t-card panel">
               <div class="panel-head"><h3>Por cliente</h3></div>
               <p v-if="!books.ai.clients.length" class="muted">Este mes nadie ha usado la IA.</p>
               <table v-else class="sheet">
@@ -202,29 +181,6 @@
                 <p class="kpi-sub">sin contar la IA</p>
               </div>
             </div>
-            <section class="t-card panel">
-              <div class="panel-head">
-                <h3>Gastos de este mes</h3>
-                <p class="pay-meta">Cada punto es un gasto. Horizontal: día. Vertical: monto.</p>
-              </div>
-              <p v-if="!books.expenses.length" class="muted">Todavía no anotas gastos este mes.</p>
-              <svg v-else class="scatter" viewBox="0 0 640 200" role="img" aria-label="Dispersión de gastos del mes">
-                <line class="axis" x1="28" y1="168" x2="624" y2="168" />
-                <line class="axis" x1="28" y1="16" x2="28" y2="168" />
-                <circle
-                  v-for="(point, index) in books.expenses"
-                  :key="point.id"
-                  class="dot out"
-                  :cx="dayX(point.day, index)"
-                  :cy="valueY(point.amount, expenseMax)"
-                  r="6"
-                >
-                  <title>Día {{ point.day }} · {{ point.label }} · {{ money(point.amount) }}</title>
-                </circle>
-                <text class="tick" x="28" y="190">día 1</text>
-                <text class="tick" x="624" y="190" text-anchor="end">día 31</text>
-              </svg>
-            </section>
             <section class="t-card panel">
               <div class="panel-head"><h3>Anotar un gasto</h3></div>
               <form class="expense" @submit.prevent="addExpense">
@@ -260,29 +216,6 @@
           </div>
           <input v-model="query" class="t-input search" type="search" placeholder="Buscar cliente" />
         </header>
-        <section v-if="books" class="t-card panel">
-          <div class="panel-head">
-            <h3>Altas de este mes</h3>
-            <p class="pay-meta">Cada punto es una tienda nueva. Horizontal: día. Vertical: lo que paga.</p>
-          </div>
-          <p v-if="!joined.length" class="muted">Este mes no hay altas.</p>
-          <svg v-else class="scatter" viewBox="0 0 640 200" role="img" aria-label="Dispersión de altas del mes">
-            <line class="axis" x1="28" y1="168" x2="624" y2="168" />
-            <line class="axis" x1="28" y1="16" x2="28" y2="168" />
-            <circle
-              v-for="(point, index) in joined"
-              :key="point.id"
-              class="dot in"
-              :cx="dayX(point.day, index)"
-              :cy="valueY(point.revenue, cloudMax)"
-              r="6"
-            >
-              <title>Día {{ point.day }} · {{ point.businessName }} · {{ money(point.revenue) }}</title>
-            </circle>
-            <text class="tick" x="28" y="190">día 1</text>
-            <text class="tick" x="624" y="190" text-anchor="end">día 31</text>
-          </svg>
-        </section>
         <p v-if="loading" class="muted">Cargando clientes…</p>
         <p v-else-if="err" class="err">{{ err }}</p>
         <div v-else class="clients">
@@ -292,10 +225,13 @@
               :key="client.id"
               type="button"
               class="client"
-              :class="{ on: selectedId === client.id }"
+              :class="{ on: selectedId === client.id, wait: client.waiting }"
               @click="openClient(client.id)"
             >
-              <strong>{{ client.businessName }}</strong>
+              <div class="client-top">
+                <strong>{{ client.businessName }}</strong>
+                <span v-if="client.waiting" class="wait-badge">{{ client.waiting }}</span>
+              </div>
               <span>{{ client.ownerName || 'Sin dueño' }} · {{ client.planName }}</span>
             </button>
             <p v-if="!filtered.length" class="muted">Ningún cliente coincide.</p>
@@ -309,7 +245,10 @@
             <div class="segs">
               <button type="button" class="seg" :class="{ on: tab === 'datos' }" @click="tab = 'datos'">Datos</button>
               <button type="button" class="seg" :class="{ on: tab === 'personas' }" @click="tab = 'personas'">Personas</button>
-              <button type="button" class="seg" :class="{ on: tab === 'correo' }" @click="openMail">Correo</button>
+              <button type="button" class="seg" :class="{ on: tab === 'correo' }" @click="openMail()">
+                Correo
+                <span v-if="selectedWaiting" class="wait-badge">{{ selectedWaiting }}</span>
+              </button>
             </div>
 
             <form v-show="tab === 'datos'" class="form" @submit.prevent="save">
@@ -366,33 +305,63 @@
 
             <div v-show="tab === 'correo'" class="mail">
               <p v-if="mailLoading" class="muted">Buscando correos…</p>
-              <p v-else-if="mailError" class="err">{{ mailError }}</p>
-              <div class="thread">
-                <p v-if="!mailLoading && !messages.length" class="muted">No hay correos con este cliente.</p>
-                <article v-for="mail in messages" :key="mail.id || mail.messageId" class="bubble" :class="mail.direction">
-                  <header>
-                    <strong>{{ mail.direction === 'out' ? 'Mi Tiendita' : mail.from }}</strong>
-                    <span>{{ formatWhen(mail.at) }}</span>
-                  </header>
-                  <p class="subject">{{ mail.subject }}</p>
-                  <p>{{ mail.text }}</p>
-                </article>
-              </div>
-              <form class="form" @submit.prevent="sendMail">
-                <label>
-                  Para
-                  <select v-model="mailTo">
-                    <option v-for="email in clientEmails" :key="email" :value="email">{{ email }}</option>
-                  </select>
-                </label>
-                <label>Asunto<input v-model="mailSubject" required /></label>
-                <label class="wide">Mensaje<textarea v-model="mailBody" rows="4" required placeholder="Escribe el mensaje" /></label>
-                <div class="wide">
-                  <button type="submit" class="t-btn t-btn-primary" :disabled="sendingMail || !clientEmails.length">
-                    {{ sendingMail ? 'Enviando…' : 'Enviar correo' }}
+              <p v-if="mailError" class="err">{{ mailError }}</p>
+              <div v-if="!mailLoading" class="desk">
+                <div class="ticket-list">
+                  <button type="button" class="t-btn t-btn-primary" @click="startTicket">Nuevo ticket</button>
+                  <button
+                    v-for="ticket in tickets"
+                    :key="ticket.id"
+                    type="button"
+                    class="ticket"
+                    :class="{ on: !newTicket && activeTicketId === ticket.id }"
+                    @click="openTicket(ticket.id)"
+                  >
+                    <strong>{{ ticket.subject }}</strong>
+                    <span class="state" :class="ticket.status">{{ ticket.status === 'open' ? 'Por responder' : 'Respondido' }}</span>
+                    <span class="when">{{ formatWhen(ticket.updatedAt) }}</span>
                   </button>
+                  <p v-if="!tickets.length" class="muted">Todavía no hay tickets con este cliente.</p>
                 </div>
-              </form>
+                <div class="ticket-pane">
+                  <form v-if="newTicket" class="form" @submit.prevent="sendMail">
+                    <label>
+                      Para
+                      <select v-model="mailTo">
+                        <option v-for="email in clientEmails" :key="email" :value="email">{{ email }}</option>
+                      </select>
+                    </label>
+                    <label>Asunto<input v-model="mailSubject" required placeholder="De qué se trata" /></label>
+                    <label class="wide">Mensaje<textarea v-model="mailBody" rows="4" required placeholder="Escribe el primer mensaje" /></label>
+                    <div class="wide">
+                      <button type="submit" class="t-btn t-btn-primary" :disabled="sendingMail || !clientEmails.length">
+                        {{ sendingMail ? 'Enviando…' : 'Abrir ticket' }}
+                      </button>
+                    </div>
+                  </form>
+                  <template v-else-if="activeTicket">
+                    <div class="thread">
+                      <article v-for="mail in activeTicket.messages" :key="mail.id || mail.messageId" class="bubble" :class="mail.direction">
+                        <header>
+                          <strong>{{ mail.direction === 'out' ? 'Mi Tiendita' : mail.from }}</strong>
+                          <span>{{ formatWhen(mail.at) }}</span>
+                        </header>
+                        <p>{{ freshText(mail.text) }}</p>
+                      </article>
+                    </div>
+                    <form class="form reply" @submit.prevent="sendMail">
+                      <p class="pay-meta wide">Respondes a {{ activeTicket.to }}. El mensaje sigue este mismo hilo.</p>
+                      <label class="wide">Respuesta<textarea v-model="mailBody" rows="4" required placeholder="Escribe la respuesta" /></label>
+                      <div class="wide">
+                        <button type="submit" class="t-btn t-btn-primary" :disabled="sendingMail">
+                          {{ sendingMail ? 'Enviando…' : 'Responder' }}
+                        </button>
+                      </div>
+                    </form>
+                  </template>
+                  <p v-else class="muted">Elige un ticket o abre uno nuevo.</p>
+                </div>
+              </div>
             </div>
           </section>
 
@@ -406,13 +375,16 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from "vue";
-import { useRoute } from "vue-router";
+import { computed, onMounted, reactive, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import AppShell from "../components/AppShell.vue";
 import { apiService } from "../apiService";
 import { labelOf, roleLabel } from "../labels";
 
 const route = useRoute();
+const router = useRouter();
+const pendingClient = ref("");
+const pendingTicket = ref("");
 const books = ref(null);
 const booksLoading = ref(true);
 const booksError = ref("");
@@ -439,8 +411,11 @@ const mailLoading = ref(false);
 const mailLoadingFor = ref("");
 const mailLoadedFor = ref("");
 const mailTo = ref("");
-const mailSubject = ref("Hola, te escribimos de Mi Tiendita");
+const mailSubject = ref("");
 const mailBody = ref("");
+const tickets = ref([]);
+const activeTicketId = ref("");
+const newTicket = ref(false);
 const sendingMail = ref(false);
 const draft = reactive({
   businessName: "",
@@ -469,16 +444,47 @@ const monthText = computed(() => {
   return label.charAt(0).toUpperCase() + label.slice(1);
 });
 
+const waiting = computed(() => books.value?.waiting || []);
+const waitingClients = computed(() => {
+  const grouped = new Map();
+  for (const item of waiting.value) {
+    const current = grouped.get(item.tenantId) || {
+      tenantId: item.tenantId,
+      businessName: item.businessName,
+      ticketId: item.ticketId,
+      count: 0,
+    };
+    current.count += 1;
+    if (!current.ticketId) current.ticketId = item.ticketId;
+    grouped.set(item.tenantId, current);
+  }
+  return [...grouped.values()];
+});
+const selectedWaiting = computed(() => {
+  const client = clients.value.find((item) => item.id === selectedId.value);
+  return Number(client?.waiting) || 0;
+});
+
 const filtered = computed(() => {
   const q = query.value.trim().toLowerCase();
-  if (!q) return clients.value;
-  return clients.value.filter((client) =>
-    [client.businessName, client.ownerName, client.ownerEmail, client.ownerUsername, client.phone, client.ownerPhone]
-      .join(" ")
-      .toLowerCase()
-      .includes(q)
-  );
+  const list = q
+    ? clients.value.filter((client) =>
+        [client.businessName, client.ownerName, client.ownerEmail, client.ownerUsername, client.phone, client.ownerPhone]
+          .join(" ")
+          .toLowerCase()
+          .includes(q)
+      )
+    : [...clients.value];
+  return list.sort((a, b) => {
+    const waitA = Number(a.waiting) || 0;
+    const waitB = Number(b.waiting) || 0;
+    if (waitA && waitB) return new Date(b.waitingAt || 0) - new Date(a.waitingAt || 0);
+    if (waitA !== waitB) return waitB - waitA;
+    return String(a.businessName || "").localeCompare(String(b.businessName || ""), "es");
+  });
 });
+
+const activeTicket = computed(() => tickets.value.find((ticket) => ticket.id === activeTicketId.value) || null);
 
 const clientEmails = computed(() => {
   const emails = (detail.value?.users || [])
@@ -500,29 +506,72 @@ function share(amount, total) {
   return Math.max(4, Math.round((Number(amount) / Number(total)) * 100));
 }
 
-const cloudUsesMax = computed(() => Math.max(1, ...(books.value?.cloud || []).map((point) => Number(point.uses) || 0)));
-const cloudMax = computed(() => Math.max(1, ...(books.value?.cloud || []).map((point) => Number(point.revenue) || 0)));
-const limitMax = computed(() => Math.max(1, ...(books.value?.cloud || []).map((point) => Number(point.limit) || 0)));
-const expenseMax = computed(() => Math.max(1, ...(books.value?.expenses || []).map((point) => Number(point.amount) || 0)));
-const joined = computed(() => (books.value?.cloud || []).filter((point) => point.joined));
+const spark = computed(() => {
+  const empty = { profit: [], revenue: [], ai: [], spent: [] };
+  const data = books.value;
+  if (!data?.month) return empty;
+  const [year, month] = String(data.month).split("-").map(Number);
+  const todayParts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Mexico_City",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const todayYear = Number(todayParts.find((part) => part.type === "year")?.value);
+  const todayMonth = Number(todayParts.find((part) => part.type === "month")?.value);
+  const todayDay = Number(todayParts.find((part) => part.type === "day")?.value);
+  const last = todayYear === year && todayMonth === month
+    ? todayDay
+    : new Date(year, month, 0).getDate();
+  const rate = Number(data.ai?.costPerUse) || 0;
+  const cloud = data.cloud || [];
+  let revenue = cloud.filter((point) => !point.joined).reduce((sum, point) => sum + Number(point.revenue || 0), 0);
+  let ai = cloud.filter((point) => !point.joined).reduce((sum, point) => sum + Number(point.uses || 0) * rate, 0);
+  let spent = 0;
+  const revenueDays = [];
+  const aiDays = [];
+  const spentDays = [];
+  const profitDays = [];
+  for (let day = 1; day <= last; day += 1) {
+    revenue += cloud
+      .filter((point) => point.joined && Number(point.day) === day)
+      .reduce((sum, point) => sum + Number(point.revenue || 0), 0);
+    ai += cloud
+      .filter((point) => point.joined && Number(point.day) === day)
+      .reduce((sum, point) => sum + Number(point.uses || 0) * rate, 0);
+    spent += (data.expenses || [])
+      .filter((row) => Number(row.day) === day)
+      .reduce((sum, row) => sum + Number(row.amount || 0), 0);
+    revenueDays.push(revenue);
+    aiDays.push(ai);
+    spentDays.push(spent);
+    profitDays.push(revenue - ai - spent);
+  }
+  return {
+    revenue: sparkPoints(revenueDays),
+    ai: sparkPoints(aiDays),
+    spent: sparkPoints(spentDays),
+    profit: sparkPoints(profitDays),
+  };
+});
 
-function valueY(value, max) {
-  const n = Number(value) || 0;
-  const m = Math.max(Number(max) || 0, 1);
-  return 168 - (n / m) * 148;
+function sparkPoints(values) {
+  const width = 160;
+  const height = 48;
+  const pad = 5;
+  const min = Math.min(0, ...values);
+  const max = Math.max(...values, 1);
+  const span = Math.max(max - min, 1);
+  return values.map((value, index) => ({
+    day: index + 1,
+    value,
+    x: values.length <= 1 ? width / 2 : pad + (index / (values.length - 1)) * (width - pad * 2),
+    y: pad + (1 - (value - min) / span) * (height - pad * 2),
+  }));
 }
 
-function cloudX(uses, index) {
-  const base = 40 + ((Number(uses) || 0) / cloudUsesMax.value) * 568;
-  const bump = (index % 5) - 2;
-  return Math.min(616, Math.max(40, base + bump * 3));
-}
-
-function dayX(day, index) {
-  const d = Math.min(31, Math.max(1, Number(day) || 1));
-  const base = 40 + ((d - 1) / 30) * 568;
-  const bump = (index % 5) - 2;
-  return Math.min(616, Math.max(40, base + bump * 3));
+function linePath(points) {
+  return points.map((point, index) => `${index ? "L" : "M"}${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(" ");
 }
 
 async function downloadReport() {
@@ -630,29 +679,51 @@ async function removeExpense(id) {
   }
 }
 
-async function openClient(id) {
-  if (selectedId.value === id && detail.value) return;
-  selectedId.value = id;
-  tab.value = "datos";
-  saveErr.value = "";
-  saveOk.value = "";
-  mailError.value = "";
-  messages.value = [];
-  mailLoading.value = false;
-  mailLoadingFor.value = "";
-  mailLoadedFor.value = "";
-  try {
-    detail.value = await apiService.platformGetTenant(id);
-    fillDraft(detail.value);
-  } catch (e) {
-    saveErr.value = e.response?.data || "No pude abrir ese cliente.";
+async function openClient(id, { mail = false, ticketId = "" } = {}) {
+  if (selectedId.value !== id || !detail.value) {
+    selectedId.value = id;
+    tab.value = mail ? "correo" : "datos";
+    saveErr.value = "";
+    saveOk.value = "";
+    mailError.value = "";
+    messages.value = [];
+    tickets.value = [];
+    activeTicketId.value = ticketId;
+    newTicket.value = false;
+    mailLoading.value = false;
+    mailLoadingFor.value = "";
+    mailLoadedFor.value = "";
+    try {
+      detail.value = await apiService.platformGetTenant(id);
+      fillDraft(detail.value);
+    } catch (e) {
+      saveErr.value = e.response?.data || "No pude abrir ese cliente.";
+      return;
+    }
+  }
+  if (mail) {
+    if (ticketId) activeTicketId.value = ticketId;
+    await openMail(true);
   }
 }
 
-async function openMail() {
+async function goToWaiting(item) {
+  pendingClient.value = item.tenantId;
+  pendingTicket.value = item.ticketId;
+  if (route.name === "platformClients") {
+    await openClient(item.tenantId, { mail: true, ticketId: item.ticketId });
+    pendingClient.value = "";
+    pendingTicket.value = "";
+    return;
+  }
+  router.push({ name: "platformClients" });
+}
+
+async function openMail(force = false) {
   tab.value = "correo";
   const id = selectedId.value;
-  if (!id || mailLoadedFor.value === id || mailLoadingFor.value === id) return;
+  if (!id || mailLoadingFor.value === id) return;
+  if (!force && mailLoadedFor.value === id) return;
   mailLoadingFor.value = id;
   mailLoading.value = true;
   mailError.value = "";
@@ -660,8 +731,16 @@ async function openMail() {
     const thread = await apiService.platformClientMail(id);
     if (selectedId.value !== id) return;
     messages.value = thread.messages || [];
+    tickets.value = thread.tickets || [];
     mailError.value = thread.inboxError || "";
     mailLoadedFor.value = id;
+    const stillThere = tickets.value.some((ticket) => ticket.id === activeTicketId.value);
+    if (!stillThere) {
+      activeTicketId.value = tickets.value.find((ticket) => ticket.status === "open")?.id || tickets.value[0]?.id || "";
+      newTicket.value = !activeTicketId.value;
+    } else {
+      newTicket.value = false;
+    }
   } catch (e) {
     if (selectedId.value === id) mailError.value = e.response?.data || "No pude cargar los correos.";
   } finally {
@@ -692,26 +771,90 @@ async function save() {
   }
 }
 
+function startTicket() {
+  newTicket.value = true;
+  activeTicketId.value = "";
+  mailSubject.value = "";
+  mailBody.value = "";
+  mailError.value = "";
+}
+
+function openTicket(id) {
+  newTicket.value = false;
+  activeTicketId.value = id;
+  mailBody.value = "";
+  mailError.value = "";
+}
+
+function freshText(value) {
+  const lines = String(value || "").split("\n");
+  const cut = lines.findIndex((line) => {
+    const text = line.trim();
+    return (
+      text.startsWith(">") ||
+      /^-{2,}/.test(text) ||
+      /^On .+wrote:$/i.test(text) ||
+      /^El .+escribió:$/i.test(text)
+    );
+  });
+  const kept = (cut === -1 ? lines : lines.slice(0, cut)).join("\n").trim();
+  return kept || String(value || "").trim();
+}
+
 async function sendMail() {
   if (!selectedId.value || sendingMail.value) return;
   sendingMail.value = true;
   mailError.value = "";
+  const opening = newTicket.value;
+  const subject = mailSubject.value.trim();
   try {
-    const thread = await apiService.platformSendClientMail(selectedId.value, {
-      to: mailTo.value,
-      subject: mailSubject.value,
-      message: mailBody.value,
-    });
+    const thread = await apiService.platformSendClientMail(selectedId.value, opening
+      ? { to: mailTo.value, subject, message: mailBody.value }
+      : { ticketId: activeTicketId.value, message: mailBody.value });
     messages.value = thread.messages || [];
+    tickets.value = thread.tickets || [];
     mailError.value = thread.inboxError || "";
     mailLoadedFor.value = selectedId.value;
     mailBody.value = "";
+    if (opening) {
+      const created = tickets.value.find((ticket) => ticket.subject.toLowerCase() === subject.toLowerCase());
+      activeTicketId.value = created?.id || tickets.value[0]?.id || "";
+      newTicket.value = false;
+      mailSubject.value = "";
+    }
+    const waitingNow = tickets.value.filter((ticket) => ticket.status === "open").length;
+    const index = clients.value.findIndex((client) => client.id === selectedId.value);
+    if (index >= 0) {
+      clients.value[index] = {
+        ...clients.value[index],
+        waiting: waitingNow,
+        waitingAt: waitingNow ? tickets.value.find((ticket) => ticket.status === "open")?.updatedAt || null : null,
+      };
+    }
+    if (books.value?.waiting) {
+      books.value = {
+        ...books.value,
+        waiting: books.value.waiting.filter((item) => item.tenantId !== selectedId.value || tickets.value.some((ticket) => ticket.id === item.ticketId && ticket.status === "open")),
+      };
+    }
   } catch (e) {
     mailError.value = e.response?.data || "No pude enviar el correo.";
   } finally {
     sendingMail.value = false;
   }
 }
+
+watch(
+  () => route.name,
+  async (name) => {
+    if (name !== "platformClients" || !pendingClient.value) return;
+    const id = pendingClient.value;
+    const ticketId = pendingTicket.value;
+    pendingClient.value = "";
+    pendingTicket.value = "";
+    await openClient(id, { mail: true, ticketId });
+  }
+);
 
 onMounted(() => {
   loadBooks();
@@ -773,13 +916,12 @@ onMounted(() => {
 .swatch.in { background: var(--timber-primary); }
 .swatch.ai { background: var(--timber-accent); }
 .swatch.out { background: #94a3b8; }
-.scatter { width: 100%; height: 13.5rem; display: block; }
-.scatter .axis { stroke: var(--timber-line); stroke-width: 1; }
-.scatter .tick { fill: var(--timber-muted); font-size: 12px; font-weight: 700; }
-.dot { stroke: var(--timber-panel); stroke-width: 1.5; }
-.dot.in { fill: var(--timber-primary); }
-.dot.ai { fill: var(--timber-accent); }
-.dot.out { fill: #94a3b8; }
+.spark { width: 100%; height: 3.1rem; display: block; margin-top: 0.35rem; }
+.spark path { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linejoin: round; stroke-linecap: round; }
+.spark circle { fill: currentColor; }
+.spark.in { color: var(--timber-primary); }
+.spark.ai { color: var(--timber-accent); }
+.spark.out { color: #94a3b8; }
 .pay-row { margin-bottom: 0.75rem; }
 .pay-top, .detail-head, .people li, .bubble header, .expense-list li {
   display: flex;
@@ -823,6 +965,39 @@ onMounted(() => {
   cursor: pointer;
 }
 .client.on { background: var(--timber-primary-soft); }
+.client.wait { background: color-mix(in srgb, var(--timber-danger) 8%, var(--timber-panel)); }
+.client-top { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+.wait-badge {
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--timber-danger);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.waiting-list { display: grid; gap: 0.45rem; }
+.waiting {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.7rem;
+  text-align: left;
+  width: 100%;
+  border: 1px solid var(--timber-line);
+  background: var(--timber-panel-elevated);
+  color: inherit;
+  border-radius: 0.75rem;
+  padding: 0.7rem 0.8rem;
+  cursor: pointer;
+  font: inherit;
+}
+.waiting span { color: var(--timber-muted); font-size: 0.85rem; font-weight: 700; }
 .client span, .people span, .contact { color: var(--timber-muted); font-size: 0.8rem; }
 .detail { min-height: 24rem; }
 .detail.empty { display: grid; place-items: center; color: var(--timber-muted); }
@@ -836,6 +1011,9 @@ onMounted(() => {
   border: 1px solid var(--timber-line);
 }
 .seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   min-height: 2.4rem;
   padding: 0 0.9rem;
   border: none;
@@ -847,6 +1025,7 @@ onMounted(() => {
   cursor: pointer;
 }
 .seg.on { background: var(--timber-primary); color: var(--timber-on-primary); }
+.seg.on .wait-badge { background: #fff; color: var(--timber-danger); }
 .form { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem 0.9rem; }
 .form label { display: grid; gap: 0.3rem; font-size: 0.82rem; font-weight: 700; color: var(--timber-muted); }
 .wide { grid-column: 1 / -1; }
@@ -885,11 +1064,43 @@ onMounted(() => {
 .people li, .bubble { padding: 0.75rem 0.8rem; border-radius: 0.8rem; background: var(--timber-panel-elevated); }
 .contact { text-align: right; }
 .mail { display: grid; gap: 0.75rem; }
-.thread { display: grid; gap: 0.4rem; }
+.desk { display: grid; grid-template-columns: 15rem minmax(0, 1fr); gap: 0.85rem; align-items: start; }
+.ticket-list { display: grid; align-content: start; gap: 0.4rem; }
+.ticket {
+  display: grid;
+  gap: 0.2rem;
+  text-align: left;
+  border: 1px solid var(--timber-line);
+  background: var(--timber-panel-elevated);
+  color: var(--timber-ink);
+  border-radius: 0.75rem;
+  padding: 0.65rem 0.7rem;
+  cursor: pointer;
+  font: inherit;
+}
+.ticket.on { border-color: var(--timber-primary); background: var(--timber-primary-soft); }
+.ticket strong { font-size: 0.88rem; }
+.when { color: var(--timber-muted); font-size: 0.75rem; font-weight: 700; }
+.state {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  height: 1.4rem;
+  padding: 0 0.5rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+.state.open { background: var(--timber-warning-soft); color: var(--timber-warning); }
+.state.answered { background: var(--timber-success-soft); color: var(--timber-success); }
+.ticket-pane { display: grid; gap: 0.75rem; }
+.thread { display: grid; gap: 0.4rem; max-height: 22rem; overflow: auto; }
 .bubble { display: grid; }
+.bubble header { display: flex; justify-content: space-between; gap: 0.6rem; }
+.bubble header span { color: var(--timber-muted); font-size: 0.75rem; font-weight: 700; }
 .bubble p { margin: 0.25rem 0 0; white-space: pre-wrap; }
 .bubble.out { background: var(--timber-primary-soft); }
-.subject { font-weight: 800; }
+.reply { margin-top: 0.2rem; }
 .err { color: var(--timber-danger); font-weight: 700; }
 .ok { color: var(--timber-success); font-weight: 700; }
 </style>

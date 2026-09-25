@@ -38,7 +38,7 @@ function createTransport() {
   });
 }
 
-async function sendViaResend({ to, subject, html }) {
+async function sendViaResend({ to, subject, html, headers }) {
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -50,6 +50,7 @@ async function sendViaResend({ to, subject, html }) {
       to: [to],
       subject,
       html,
+      headers: headers || undefined,
     }),
   });
   const data = await res.json().catch(() => ({}));
@@ -60,18 +61,21 @@ async function sendViaResend({ to, subject, html }) {
   return { sent: true, provider: 'resend', id: data.id || null };
 }
 
-async function sendViaSmtp({ to, subject, html }) {
+async function sendViaSmtp({ to, subject, html, messageId, inReplyTo, references }) {
   const transport = createTransport();
   const info = await transport.sendMail({
     from: mailFrom(),
     to,
     subject,
     html,
+    messageId: messageId || undefined,
+    inReplyTo: inReplyTo || undefined,
+    references: references && references.length ? references : undefined,
   });
-  return { sent: true, provider: 'smtp', id: info.messageId || null };
+  return { sent: true, provider: 'smtp', id: info.messageId || messageId || null };
 }
 
-async function sendMail({ to, subject, html }) {
+async function sendMail({ to, subject, html, messageId, inReplyTo, references }) {
   const recipient = String(to || '').trim().toLowerCase();
   if (!recipient || !recipient.includes('@')) {
     throw new Error('Destinatario de correo inválido');
@@ -83,10 +87,13 @@ async function sendMail({ to, subject, html }) {
     err.code = 'MAIL_NOT_CONFIGURED';
     throw err;
   }
+  const headers = {};
+  if (inReplyTo) headers['In-Reply-To'] = inReplyTo;
+  if (references && references.length) headers.References = references.join(' ');
   if (process.env.RESEND_API_KEY) {
-    return sendViaResend({ to: recipient, subject, html });
+    return sendViaResend({ to: recipient, subject, html, headers });
   }
-  return sendViaSmtp({ to: recipient, subject, html });
+  return sendViaSmtp({ to: recipient, subject, html, messageId, inReplyTo, references });
 }
 
 async function sendTemplated(to, built) {

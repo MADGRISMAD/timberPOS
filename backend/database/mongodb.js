@@ -613,12 +613,41 @@ async function SaveSupportMail(doc) {
   await ensureSupportMailIndex();
   const messageId = String(doc.messageId || '').trim();
   if (!messageId) return null;
+  const insert = {
+    messageId,
+    tenantId: doc.tenantId ? String(doc.tenantId) : null,
+    ticketId: doc.ticketId || null,
+    direction: doc.direction,
+    from: doc.from || '',
+    to: doc.to || '',
+    subject: doc.subject || '',
+    text: doc.text || '',
+    inReplyTo: doc.inReplyTo || '',
+    references: Array.isArray(doc.references) ? doc.references : [],
+    at: doc.at || new Date(),
+    createdAt: new Date(),
+  };
   await dbConnection.collection('support_mail').updateOne(
     { messageId },
-    { $setOnInsert: { ...doc, messageId, createdAt: new Date() } },
+    { $setOnInsert: insert },
     { upsert: true }
   );
+  const set = {};
+  if (doc.tenantId) set.tenantId = String(doc.tenantId);
+  if (doc.ticketId) set.ticketId = String(doc.ticketId);
+  if (doc.inReplyTo) set.inReplyTo = String(doc.inReplyTo);
+  if (Array.isArray(doc.references) && doc.references.length) set.references = doc.references;
+  if (Object.keys(set).length) {
+    await dbConnection.collection('support_mail').updateOne({ messageId }, { $set: set });
+  }
   return dbConnection.collection('support_mail').findOne({ messageId });
+}
+
+async function FindSupportMailByMessageIds(ids) {
+  await ensureSupportMailIndex();
+  const wanted = [...new Set((ids || []).map((id) => String(id || '').trim()).filter(Boolean))];
+  if (!wanted.length) return [];
+  return dbConnection.collection('support_mail').find({ messageId: { $in: wanted } }).toArray();
 }
 
 async function ListSupportMail(tenantId) {
@@ -628,6 +657,17 @@ async function ListSupportMail(tenantId) {
     .find({ tenantId: String(tenantId) })
     .sort({ at: 1 })
     .limit(80)
+    .toArray();
+  return rows.map(publicMail);
+}
+
+async function ListSupportMailAll() {
+  await ensureSupportMailIndex();
+  const rows = await dbConnection
+    .collection('support_mail')
+    .find({ tenantId: { $nin: [null, ''] } })
+    .sort({ at: 1 })
+    .limit(400)
     .toArray();
   return rows.map(publicMail);
 }
@@ -653,6 +693,9 @@ function publicMail(row) {
     to: row.to || '',
     subject: row.subject || '',
     text: row.text || '',
+    ticketId: row.ticketId || null,
+    inReplyTo: row.inReplyTo || '',
+    references: Array.isArray(row.references) ? row.references : [],
     at: row.at || row.createdAt || null,
   };
 }
@@ -668,7 +711,7 @@ module.exports = {
   GetMenus, GetMenuById, CreateMenu, UpdateMenu, DeleteMenu,
   GetFoods, GetFoodById, GetFoodByBarcode, CreateFood, UpdateFood, DecrementFoodStock, IncrementFoodStock, DeleteFood,
   GetOrders, GetOrderById, GetOrderByInvoiceToken, CreateOrder, UpdateOrder, GetOrdersByCashSession,
-  SaveSupportMail, ListSupportMail, ListUnmatchedSupportMail,
+  SaveSupportMail, FindSupportMailByMessageIds, ListSupportMail, ListSupportMailAll, ListUnmatchedSupportMail,
   GetInvites, GetInviteByToken, CreateInvite, UpdateInvite, DeleteInvite,
   GetOpenCashSession, GetCashSessionById, CreateCashSession, UpdateCashSession,
   aiMonthKey, GetAiUsage, ReserveAiUse, RefundAiUse, ListAiUsage, ListAiUsageAll,

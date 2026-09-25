@@ -7,6 +7,11 @@ const compression = require('compression');
 const server = require('http').createServer(app);
 
 app.set('trust proxy', 1);
+app.use((req, _res, next) => {
+  if (req.url === '/api') req.url = '/';
+  else if (req.url.startsWith('/api/')) req.url = req.url.slice(4) || '/';
+  next();
+});
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
 app.use(compression());
@@ -31,6 +36,10 @@ app.use('/platform', require('./routers/platform.router'));
 const { verifyMailConfig } = require('./utils/mail.utils');
 verifyMailConfig().catch(() => {});
 
-server.listen(process.env.PORT, () => {
-  console.log(`Server listening on port ${process.env.PORT}`);
-});
+if (!process.env.VERCEL) {
+  server.listen(process.env.PORT, () => {
+    console.log(`Server listening on port ${process.env.PORT}`);
+  });
+}
+
+module.exports = app;

@@ -63,8 +63,19 @@ async function clientCard(tenant, { withUsers = false } = {}) {
 
 async function listTenants(req, res) {
   try {
-    const tenants = await db.ListTenants();
-    const enriched = await Promise.all(tenants.map((tenant) => clientCard(tenant)));
+    const [tenants, inbox] = await Promise.all([db.ListTenants(), supportMail.waitingInbox()]);
+    const waiting = new Map();
+    for (const item of inbox.items || []) {
+      const current = waiting.get(item.tenantId) || { count: 0, at: null };
+      current.count += 1;
+      if (!current.at || new Date(item.updatedAt || 0) > new Date(current.at)) current.at = item.updatedAt;
+      waiting.set(item.tenantId, current);
+    }
+    const enriched = await Promise.all(tenants.map(async (tenant) => {
+      const card = await clientCard(tenant);
+      const open = waiting.get(tenant.id) || { count: 0, at: null };
+      return { ...card, waiting: open.count, waitingAt: open.at };
+    }));
     return res.status(200).json(enriched);
   } catch (err) {
     console.error(err);
@@ -167,8 +178,9 @@ async function sendClientMail(req, res) {
         .map((user) => String(user.email || '').trim().toLowerCase())
         .filter((email) => email.includes('@'))
     );
+    const ticketId = String(req.body?.ticketId || '').trim();
     const to = String(req.body?.to || card.ownerEmail || '').trim().toLowerCase();
-    if (!allowed.has(to)) {
+    if (!ticketId && !allowed.has(to)) {
       return res.status(400).send('Ese correo no pertenece a este cliente.');
     }
     const thread = await supportMail.sendToClient({
@@ -177,6 +189,7 @@ async function sendClientMail(req, res) {
       subject: req.body?.subject,
       message: req.body?.message,
       storeName: card.businessName,
+      ticketId,
     });
     return res.status(200).json(thread);
   } catch (err) {
@@ -421,7 +434,12 @@ async function buildBooks() {
 
 async function overview(req, res) {
   try {
-    return res.status(200).json(await buildBooks());
+    const [books, inbox] = await Promise.all([buildBooks(), supportMail.waitingInbox()]);
+    return res.status(200).json({
+      ...books,
+      waiting: inbox.items || [],
+      inboxError: inbox.inboxError || '',
+    });
   } catch (err) {
     console.error(err);
     return res.status(500).send(err.message || 'No pude armar el resumen.');
